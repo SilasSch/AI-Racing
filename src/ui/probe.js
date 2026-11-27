@@ -2,6 +2,7 @@
 import { generateTrack } from '../core/generator.js';
 import { createWorld, stepWorld } from '../core/world.js';
 import { DT } from '../core/rules.js';
+import { updateGauges } from './gauges.js';
 
 const SLICE_MS = 12;
 const fmt = (v, digits = 0) => v.toLocaleString('de-DE', { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -71,6 +72,11 @@ export function initProbe({ trackView, netView, getChampion, pause, takeOver, re
         const car = world.cars[0];
         trackView.draw(world, 0);
         netView.draw(champion.sizes, car.genome, car.input, car.scratch, champion.rules.channels);
+        if (champion.rules.endurance) {
+          // The gauges follow the car that is driving now, not the paused training leader.
+          document.getElementById('gauges-title').textContent = 'Auto der Probefahrt';
+          updateGauges(car, champion.rules);
+        }
         status.innerHTML = world.done
           ? 'Probefahrt beendet. <strong>Weiter</strong> setzt das Training fort.'
           : `<strong>Probefahrt</strong> auf einer Strecke, die im Training nie vorkam · ${Math.round(car.state.vx * 3.6)} km/h`;

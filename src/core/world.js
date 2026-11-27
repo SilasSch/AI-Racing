@@ -170,14 +170,17 @@ function stepEndurance(world) {
     car.steps++;
     car.time = car.steps * DT;
 
-    if (car.cond.damage >= 1) {
+    if (car.cond.fuel <= 0) {
+      // An empty tank is the end of the race: no rolling on, no rescue in the pit.
+      end(car, 'sprit');
+    } else if (car.cond.damage >= 1) {
       end(car, 'schaden');
     } else if (world.untilLap && car.progress >= length) {
       end(car, 'runde');
     } else if (car.steps >= world.maxSteps) {
       end(car, 'zeit');
     } else if (car.steps >= car.stallAt) {
-      if (car.progress - car.stallMark < rules.stall.minProgress) end(car, car.cond.fuel <= 0 ? 'sprit' : 'stillstand');
+      if (car.progress - car.stallMark < rules.stall.minProgress) end(car, 'stillstand');
       car.stallMark = car.progress;
       car.stallAt = car.steps + world.stallSteps;
     }

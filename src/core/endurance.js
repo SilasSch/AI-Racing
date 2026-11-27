@@ -4,13 +4,13 @@ import { wallDistance } from './track.js';
 /**
  * Rates calibrated against how trained cars really drive (docs/stufe-2-nachweis.md):
  * they use about 25 kW of 300 and a lap takes 50 to 90 s. At full pace a tank lasts about
- * 100 s, in economy about twice that but much slower, so every race needs a stop.
- * Tyres reach the cliff after about 220 s.
+ * 220 s, roughly three laps. An empty tank ends the race, and no tank lasts the shortest
+ * race even when idling, so every race needs a stop. Tyres reach the cliff after about 220 s.
  */
 export const ENDURANCE = {
   tank: 110, // kg of fuel when full
-  idle: 0.36, // kg per second just for running the engine
-  burn: 3e-5, // kg per joule of engine work
+  idle: 0.3, // kg per second just for running the engine
+  burn: 8e-6, // kg per joule of engine work
   paceBurn: 0.1, // at pace 0 a joule costs this much less fuel
   minPower: 0.06, // engine power at pace 0, as a share of full power
   wearBase: 0.0016, // tyre wear per second just for rolling

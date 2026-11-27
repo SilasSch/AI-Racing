@@ -48,7 +48,7 @@ test('Regelsatz ausdauer: 15 Kanäle, Wandkontakt als Schaden, Strategie-Netz', 
   assert.deepEqual(RULES_AUSDAUER.channels.slice(12).map((c) => c.type), ['grip', 'fuel', 'pace']);
   assert.deepEqual(RULES_AUSDAUER.channels.slice(0, 12), RULES_FAHREN.channels);
   assert.equal(RULES_AUSDAUER.wallContact, 'damage');
-  assert.deepEqual(RULES_AUSDAUER.raceSeconds, [240, 400]);
+  assert.deepEqual(RULES_AUSDAUER.raceSeconds, [400, 560]);
   assert.deepEqual(RULES_AUSDAUER.strategy.sizes, STRATEGY_SIZES);
   assert.equal(RULES_AUSDAUER.clean({ endReason: 'zeit', progress: 700 }, { length: 628 }), true);
   assert.equal(RULES_AUSDAUER.clean({ endReason: 'zeit', progress: 600 }, { length: 628 }), false);
@@ -71,14 +71,36 @@ test('sense liefert Haftung, Tankanteil, Tempovorgabe', () => {
   assert.deepEqual([out[12], out[13], out[14]], [1, 0, 1]);
 });
 
-test('ohne Box rollt das Auto mit leerem Tank aus und fällt aus', () => {
+test('leerer Tank ist sofort Ausfall: kein Ausrollen, keine Rettung in der Box', () => {
   const w = race(NEVER, { seconds: 320 });
-  runToEnd(w);
   const c = w.cars[0];
+  let before = null;
+  while (!w.done) { before = { fuel: c.cond.fuel, progress: c.progress }; stepWorld(w); }
   assert.equal(c.endReason, 'sprit');
   assert.equal(c.cond.fuel, 0);
+  assert.ok(before.fuel > 0, 'im Schritt davor war noch Sprit da');
+  assert.ok(c.progress - before.progress < 1, 'kein Ausrollen nach dem letzten Tropfen');
   assert.equal(c.stops, 0);
-  assert.ok(c.time > 80 && c.time < 200, `time ${c.time}`);
+  assert.ok(c.time > 60 && c.time < 160, `time ${c.time}`);
+});
+
+test('Tank leer kurz vor der Linie trotz Boxenwunsch: kein Service, Ausfall', () => {
+  const w = race(ALWAYS, { seconds: 320 });
+  const c = w.cars[0];
+  // let it decide to pit, then leave it with fuel for only a few more seconds
+  while (c.progress < track.length - 60) stepWorld(w);
+  assert.equal(c.decision.box, true);
+  c.cond.fuel = 0.002;
+  runToEnd(w);
+  assert.equal(c.endReason, 'sprit');
+  assert.equal(c.stops, 0);
+  assert.equal(c.pit, null);
+  assert.ok(c.progress < track.length);
+});
+
+test('kein Tank reicht für das kürzeste Rennen, auch nicht im Leerlauf', () => {
+  const e = RULES_AUSDAUER.endurance;
+  assert.ok(e.tank / e.idle < RULES_AUSDAUER.raceSeconds[0], `${e.tank / e.idle} s gegen ${RULES_AUSDAUER.raceSeconds[0]} s`);
 });
 
 test('mit Box in jeder Runde: Stopps, voller Tank, Rennen endet mit der Zeit', () => {

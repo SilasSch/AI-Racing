@@ -163,7 +163,10 @@ function draw() {
   trackView.draw(world, leader);
   const car = world.cars[leader];
   netView.draw(trainer.sizes, car?.genome ?? null, car?.input ?? null, car?.scratch ?? null, trainer.rules.channels);
-  if (mode === 'ausdauer') updateGauges(car ?? null, trainer.rules);
+  if (mode === 'ausdauer') {
+    $('gauges-title').textContent = 'Führendes Auto';
+    updateGauges(car ?? null, trainer.rules);
+  }
   $('status').innerHTML = statusText(world, leader);
 }
 

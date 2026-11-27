@@ -364,6 +364,11 @@ async function waitGen(page, min, ms) {
       await p2.click('#speed-1');
       await p2.click('#btn-probe');
       await p2.waitForTimeout(400);
+      // the gauges must show the car that is driving now: a fresh one with a full tank
+      const fuel = (await p2.textContent('#g-fuel output')).trim();
+      const head = (await p2.textContent('#gauges h2')).trim();
+      if (fuel !== '100 %') throw new Error(`Anzeige zeigt nicht das Probefahrt-Auto: Sprit ${fuel}`);
+      if (!/Probefahrt/.test(head)) throw new Error(`Überschrift der Anzeige: ${head}`);
       await p2.click('#mode-fahren');
       if (await visible(p2, '#probe-msg')) throw new Error('Meldung der Probefahrt bleibt stehen');
       if ((await gen(p2)) < 20) throw new Error('Fahren-Stand verloren');

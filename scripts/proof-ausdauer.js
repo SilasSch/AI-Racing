@@ -1,6 +1,7 @@
 // Stage 2 proof. For each seed: 60 generations of "fahren", then endurance from those drivers.
 // Every 5th generation the best car drives one fresh race on a control track. It passes when
-//   (a) it is still running at the end,  (b) it made at least one pit stop, and
+//   (a) it is still running at the end (an empty tank ends a race at once, so this also
+//       means the tank never ran dry),  (b) it made at least one pit stop, and
 //   (c) the same driver with the strategy "never pit" runs out of fuel.
 // It also measures whether the learned strategy is any good, against fixed strategies with
 // the same driver and the same pace. Those exist only in this script.
@@ -14,7 +15,7 @@ import { createWorld, stepWorld } from '../src/core/world.js';
 
 const FAHREN_GENS = 60;
 const CHECK_TRACK = 50; // control track of medium difficulty
-const CHECK_SECONDS = 320; // middle of the race length range
+const CHECK_SECONDS = 480; // middle of the race length range
 const COMPARE_TRACKS = [20, 35, 50, 65, 80, 95];
 const arg = (name, fallback) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -31,7 +32,7 @@ const STRATEGIES = {
   // as late as possible: pit when the fuel will not last another lap and a bit; tyres past 60 % wear
   late: (car, rules) => {
     const laps = car.fuelPerLap > 0 ? car.cond.fuel / car.fuelPerLap : car.cond.fuel / rules.endurance.tank > 0.5 ? 9 : 0;
-    return { box: laps < 1.3, fuelTarget: 1, tyres: car.cond.wear > 0.6 };
+    return { box: laps < 1.5, fuelTarget: 1, tyres: car.cond.wear > 0.6 };
   },
 };
 
@@ -110,7 +111,7 @@ if (process.send) {
   results.sort((a, b) => a.seed - b.seed);
   const m = (v) => `${Math.round(v)} m`;
   console.log(`Nachweis Ausdauer: bis zu ${gens} Generationen, aufbauend auf ${FAHREN_GENS} Generationen "Fahren lernen"`);
-  console.log(`Prüfrennen: Kontrollstrecke ${CHECK_TRACK}, ${CHECK_SECONDS} s. Bestanden heißt: Rennen beendet, mindestens ein Stopp, und ohne Box wäre der Tank leer.\n`);
+  console.log(`Prüfrennen: Kontrollstrecke ${CHECK_TRACK}, ${CHECK_SECONDS} s. Bestanden heißt: Rennen beendet (also nie mit leerem Tank), mindestens ein Stopp, und ohne Box wäre der Tank leer.\n`);
   console.log('Seed | bestanden in Gen. | Stopps | Stints (s)        | Distanz  | Gen. 5: Distanz, Ende | Rechenzeit');
   console.log('-----|-------------------|--------|-------------------|----------|-----------------------|-----------');
   for (const r of results) {

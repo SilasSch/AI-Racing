@@ -272,7 +272,7 @@ th { font-weight: 600; color: var(--ink-2); }
             <div class="tile" id="tile-stops" hidden><div class="eyebrow" title="Boxenstopps des besten Autos je Rennen, letzte Generation">Stopps</div><div class="num" id="stat-stops">–</div></div>
           </div>
           <div class="gauges" id="gauges" hidden>
-            <h2>Führendes Auto</h2>
+            <h2 id="gauges-title">Führendes Auto</h2>
             <div class="gauge" id="g-fuel"><span>Sprit</span><div class="bar"><i></i></div><output></output></div>
             <div class="gauge" id="g-tyres"><span>Reifen</span><div class="bar"><i></i><b class="mark"></b></div><output></output></div>
             <div class="gauge" id="g-damage"><span>Schaden</span><div class="bar"><i></i></div><output></output></div>
@@ -307,9 +307,9 @@ th { font-weight: 600; color: var(--ink-2); }
       </section>
 
       <section class="explain" id="explain-ausdauer" aria-label="Erklärung Ausdauer" hidden>
-        <div><h3>Was im Ausdauer-Modus dazukommt</h3><p>Reifen bauen ab, erst langsam, dann steil. Sprit wird verbraucht und macht das Auto schwer. Die Wand beendet die Fahrt nicht mehr, hinterlässt aber Schaden, der Haftung und Leistung kostet.</p></div>
+        <div><h3>Was im Ausdauer-Modus dazukommt</h3><p>Reifen bauen ab, erst langsam, dann steil. Sprit wird verbraucht und macht das Auto schwer, ein leerer Tank beendet das Rennen. Die Wand beendet die Fahrt nicht mehr, hinterlässt aber Schaden, der Haftung und Leistung kostet.</p></div>
         <div><h3>Der Boxenfunk ist ein zweites Netz</h3><p>Einmal pro Runde entscheidet es: Box oder nicht, wie viel tanken, neue Reifen, welches Tempo. Niemand hat ihm eine Regel dafür gegeben. Wer zu oft stoppt, verliert Zeit, wer zu selten stoppt, bleibt liegen.</p></div>
-        <div><h3>Was ein Stopp kostet</h3><p>14 Sekunden für die Durchfahrt, dazu bis zu 7 Sekunden Tanken, 6 Sekunden für Reifen und bis zu 20 Sekunden Reparatur. Gewertet wird die Distanz in vier bis knapp sieben Minuten Rennzeit.</p></div>
+        <div><h3>Was ein Stopp kostet</h3><p>14 Sekunden für die Durchfahrt, dazu bis zu 7 Sekunden Tanken, 6 Sekunden für Reifen und bis zu 20 Sekunden Reparatur. Ein Tank reicht etwa drei Runden, ein Rennen dauert knapp sieben bis gut neun Minuten. Gewertet wird die Distanz.</p></div>
       </section>
       <section class="explain" id="explain-fahren" aria-label="Erklärung">
         <div><h3>Was ein Auto sieht</h3><p>Neun Abstände zur Wand, sein Tempo, wie stark es seitlich rutscht und seinen Lenkwinkel. Keine Karte, keine Position, keine Kurve voraus.</p></div>
