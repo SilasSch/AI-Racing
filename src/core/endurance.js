@@ -95,3 +95,13 @@ export function hitWall(cond, car, track, radius, e) {
   }
   return true;
 }
+
+/**
+ * Seconds a pit stop takes: the drive-through, then fuel by the amount added,
+ * then tyres if asked for, then repair by the damage. One after the other.
+ */
+export function pitDuration(cond, decision, rules) {
+  const pit = rules.pit;
+  const added = decision.fuelTarget * rules.endurance.tank - cond.fuel;
+  return pit.base + pit.perKg * (added > 0 ? added : 0) + (decision.tyres ? pit.tyres : 0) + pit.perDamage * cond.damage;
+}
