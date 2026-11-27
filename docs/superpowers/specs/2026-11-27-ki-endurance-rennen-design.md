@@ -223,6 +223,10 @@ Stufe 1: 12 Eingaben → 16 → 16 → 2. Feedforward, `tanh`, kein Gedächtnis.
 - Die Raten sind so gerafft, dass ein Tank etwa 5–8 Runden reicht und ein
   Trainingsrennen mindestens einen Stopp braucht.
 
+> Stand nach Stufe 2: Ein Tank reicht etwa 3 Runden, nicht 5–8, und jedes Rennen braucht
+> einen Stopp. Gestoppt wird gelernt, eine gute Stintlänge bisher nicht.
+> Einzelheiten in `docs/stufe-2-nachweis.md`.
+
 ### 8.2 Box
 
 - Die Box liegt an Start/Ziel. Hat das Strategie-Netz „Box“ angefordert, wird das
