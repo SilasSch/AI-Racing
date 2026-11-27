@@ -40,6 +40,29 @@ export function testTracks() {
   return cachedTestTracks;
 }
 
+export const VALIDATION_COUNT = 100;
+
+/** Seeds of the control set. Top bit set like the test set, different hash stream. */
+export function validationTrackSeed(i) {
+  return (hashSeed(4, i) | 0x80000000) >>> 0;
+}
+
+let cachedValidationTracks = null;
+
+/**
+ * 100 further tracks, easiest to hardest, that nothing in training or in picking
+ * `proven` ever looks at. A result on these is an unbiased measurement.
+ */
+export function validationTracks() {
+  if (!cachedValidationTracks) {
+    cachedValidationTracks = [];
+    for (let i = 0; i < VALIDATION_COUNT; i++) {
+      cachedValidationTracks.push(generateTrack(validationTrackSeed(i), i / (VALIDATION_COUNT - 1)));
+    }
+  }
+  return cachedValidationTracks;
+}
+
 function startTrack(trainer) {
   const seed = trainingTrackSeed(trainer.seed, trainer.gen, trainer.trackIndex);
   const track = generateTrack(seed, trainer.difficulty);
@@ -165,15 +188,15 @@ export function runGeneration(trainer) {
 }
 
 /**
- * Measures `genome` on the test tracks, in two ways per track:
+ * Measures `genome` on the test tracks (or on `tracks`), in two ways per track:
  * a lap attempt (ok = full lap without touching a wall), and the same measure
  * training uses (distance in the fixed episode time), so the two curves compare.
  * @returns {{passed:number, meanSpeed:number, perTrack:{ok:boolean,reason:string,speed:number}[]}}
  */
-export function runTest(genome, trainer) {
+export function runTest(genome, trainer, tracks = testTracks()) {
   const perTrack = [];
   let passed = 0, speedSum = 0;
-  for (const track of testTracks()) {
+  for (const track of tracks) {
     const lap = createWorld(track, trainer.rules, trainer.spec, trainer.sizes, [genome], { untilLap: true });
     runToEnd(lap);
     const timed = createWorld(track, trainer.rules, trainer.spec, trainer.sizes, [genome]);

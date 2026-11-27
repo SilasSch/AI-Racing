@@ -35,9 +35,14 @@ let override = null; // a view that temporarily takes over the track canvas (tes
 
 /** The car to use for test drives: the one with the best result on unknown tracks. */
 export function getChampion() {
-  const genome = trainer.proven?.genome ?? trainer.champion;
+  const proven = trainer.proven;
+  const genome = proven?.genome ?? trainer.champion;
   if (!genome) return null;
-  return { genome, sizes: trainer.sizes, rules: trainer.rules, spec: trainer.spec, difficulty: trainer.difficulty };
+  // Say which car this is. It is usually not the car the "Teststrecken" tile is showing.
+  const label = proven
+    ? `Auto aus Generation ${proven.gen} (bisher bestes Testergebnis: ${proven.passed} von 20)`
+    : `Bestes Auto aus Generation ${trainer.gen} (noch nicht getestet)`;
+  return { genome, label, sizes: trainer.sizes, rules: trainer.rules, spec: trainer.spec, difficulty: trainer.difficulty };
 }
 
 function save() {

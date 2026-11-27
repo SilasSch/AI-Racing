@@ -3,7 +3,7 @@
 import { fork } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
-import { createTrainer, runGeneration } from '../src/core/trainer.js';
+import { createTrainer, runGeneration, runTest, validationTracks } from '../src/core/trainer.js';
 
 const NEEDED = 16;
 const arg = (name, fallback) => {
@@ -25,7 +25,10 @@ if (process.send) {
         if (test.passed >= NEEDED) passedAt = trainer.gen;
       }
     }
-    process.send({ seed, passedAt, bestPassed, difficulty: trainer.difficulty, gens: trainer.gen, seconds: (Date.now() - t0) / 1000 });
+    // The car that passed was picked because of its test result, so that result flatters it.
+    // The control set was used for nothing, which makes this number an honest one.
+    const control = passedAt === null ? null : runTest(trainer.champion, trainer, validationTracks()).passed;
+    process.send({ seed, passedAt, bestPassed, control, difficulty: trainer.difficulty, gens: trainer.gen, seconds: (Date.now() - t0) / 1000 });
     process.exit(0);
   });
 } else {
@@ -48,14 +51,21 @@ if (process.send) {
   });
   results.sort((a, b) => a.seed - b.seed);
   console.log(`Lernnachweis: mindestens ${NEEDED} von 20 unbekannten Strecken innerhalb von ${gens} Generationen\n`);
-  console.log('Seed | bestanden in Generation | bestes Testergebnis | Schwierigkeit am Ende | Rechenzeit');
-  console.log('-----|-------------------------|---------------------|-----------------------|-----------');
+  console.log('Seed | bestanden in Generation | Testsatz (20) | Kontrollsatz (100) | Schwierigkeit am Ende | Rechenzeit');
+  console.log('-----|-------------------------|---------------|--------------------|-----------------------|-----------');
   for (const r of results) {
     const when = r.passedAt === null ? 'nicht bestanden' : String(r.passedAt);
-    console.log(`${String(r.seed).padStart(4)} | ${when.padEnd(23)} | ${`${r.bestPassed}/20`.padEnd(19)} | ${String(r.difficulty).padEnd(21)} | ${r.seconds.toFixed(0)} s`);
+    const control = r.control === null ? '-' : `${r.control}/100`;
+    console.log(`${String(r.seed).padStart(4)} | ${when.padEnd(23)} | ${`${r.bestPassed}/20`.padEnd(13)} | ${control.padEnd(18)} | ${String(r.difficulty).padEnd(21)} | ${r.seconds.toFixed(0)} s`);
+  }
+  const measured = results.filter((r) => r.control !== null);
+  if (measured.length) {
+    const mean = measured.reduce((sum, r) => sum + r.control, 0) / measured.length;
+    const worst = Math.min(...measured.map((r) => r.control));
+    console.log(`\nKontrollsatz: Das Auto, das den Test als erstes bestand, schafft im Mittel ${mean.toFixed(0)} von 100 Strecken, die weder Training noch Auswahl je gesehen haben (schlechtester Startwert: ${worst}).`);
   }
   const passed = results.filter((r) => r.passedAt !== null).length;
   const needed = Math.ceil(seeds * 0.8);
-  console.log(`\n${passed} von ${seeds} Startwerten bestanden (gefordert: ${needed}).`);
+  console.log(`${passed} von ${seeds} Startwerten bestanden (gefordert: ${needed}).`);
   process.exit(passed >= needed ? 0 : 1);
 }

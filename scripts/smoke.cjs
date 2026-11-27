@@ -66,6 +66,17 @@ async function waitGen(page, min, ms) {
       noErrors();
     });
 
+    await check('Regler und Zurücksetzen sind ohne Aufklappen sichtbar', async () => {
+      for (const id of ['#btn-reset', '#seed', '#mut-rate', '#mut-sigma']) {
+        if (!(await page.isVisible(id))) throw new Error(`${id} ist nicht sichtbar`);
+      }
+    });
+
+    await check('die Seite sagt, welches Auto die Probefahrten fährt', async () => {
+      const note = (await page.textContent('#champion-note')).trim();
+      if (!/schwankt/.test(note) || !/bisher besten Testergebnis/.test(note)) throw new Error(`Hinweis: ${note}`);
+    });
+
     await check('vor dem Start ist die Strecke schon gezeichnet', async () => {
       const colours = await page.evaluate(() => {
         const c = document.querySelector('#cv-track');
@@ -171,6 +182,8 @@ async function waitGen(page, min, ms) {
         const el = document.querySelector('#probe-msg');
         return !el.hidden && /Runde geschafft|Wandkontakt|Stehen geblieben|Zeit abgelaufen/.test(el.textContent);
       }, null, { timeout: 60000 });
+      const told = await page.textContent('#probe-msg');
+      if (!/Auto aus Generation \d+ \(bisher bestes Testergebnis: \d+ von 20\)/.test(told)) throw new Error(`nennt das Auto nicht: ${told}`);
       const before = await gen(page);
       await page.waitForTimeout(600);
       if ((await gen(page)) !== before) throw new Error('Training läuft während der Probefahrt weiter');
@@ -202,6 +215,8 @@ async function waitGen(page, min, ms) {
         const el = document.querySelector('#draw-result');
         return !el.hidden && /Runde geschafft|Wandkontakt|Stehen geblieben|Zeit abgelaufen/.test(el.textContent);
       }, null, { timeout: 90000 });
+      const told = await page.textContent('#draw-result');
+      if (!/Auto aus Generation \d+ \(bisher bestes Testergebnis: \d+ von 20\)/.test(told)) throw new Error(`nennt das Auto nicht: ${told}`);
       noErrors();
     });
 

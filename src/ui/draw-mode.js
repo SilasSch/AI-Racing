@@ -23,6 +23,7 @@ export function initDrawMode({ getTheme, getChampion }) {
   let pointer = null; // id of the pointer that is drawing
   let visible = false;
   let lastFrame = 0;
+  let driver = ''; // label of the car that is driving
   const driveState = { carry: 0 };
 
   const halfWidth = () => Number(widthInput.value);
@@ -132,9 +133,10 @@ export function initDrawMode({ getTheme, getChampion }) {
     const champion = getChampion();
     if (!track || !champion) return;
     world = createWorld(track, champion.rules, champion.spec, champion.sizes, [champion.genome], { untilLap: true });
+    driver = champion.label;
     driveState.carry = 0;
     result.hidden = true;
-    message.textContent = 'Das beste Auto fährt deine Strecke zum ersten Mal.';
+    message.textContent = `${driver} fährt deine Strecke zum ersten Mal.`;
     refreshControls();
     lastFrame = performance.now();
     requestAnimationFrame(frame);
@@ -145,7 +147,7 @@ export function initDrawMode({ getTheme, getChampion }) {
     const delta = Math.min(100, now - lastFrame);
     lastFrame = now;
     if (driveFrame(world, delta, DRIVE_SPEED, driveState)) {
-      result.textContent = `Deine Strecke: ${describeRun(world.cars[0], track)}`;
+      result.textContent = `${driver} auf deiner Strecke: ${describeRun(world.cars[0], track)}`;
       result.hidden = false;
       message.textContent = '';
       refreshControls();

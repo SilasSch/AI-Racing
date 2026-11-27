@@ -59,7 +59,7 @@ export function initProbe({ trackView, netView, getChampion, pause, takeOver, re
       step(deltaMs, speed) {
         if (world.done) return;
         if (driveFrame(world, deltaMs, speed, state)) {
-          message.textContent = `Neue Strecke, Schwierigkeit ${level} von 10: ${describeRun(world.cars[0], track)}`;
+          message.textContent = `${champion.label} auf einer neuen Strecke, Schwierigkeit ${level} von 10: ${describeRun(world.cars[0], track)}`;
           message.hidden = false;
         }
       },

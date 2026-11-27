@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   createTrainer, advance, runGeneration, runTest, testTracks, trainingTrackSeed, testTrackSeed,
+  validationTracks, validationTrackSeed,
   serialize, restoreTrainer, TRACKS_PER_GEN, TEST_EVERY,
 } from '../src/core/trainer.js';
 import { validateTrack } from '../src/core/track.js';
@@ -226,4 +227,30 @@ test('proven übersteht Speichern und Laden', () => {
   assert.deepEqual(bytes(r.proven.genome), bytes(t.proven.genome));
   const broken = { ...serialize(t), proven: { gen: 5, passed: 3, genome: '###' } };
   assert.equal(restoreTrainer(broken), null);
+});
+
+test('Kontrollsatz: 100 Strecken, die weder Training noch Auswahl je sehen', () => {
+  const tracks = validationTracks();
+  assert.equal(tracks.length, 100);
+  assert.equal(validationTracks(), tracks);
+  const testSeeds = new Set(Array.from({ length: 20 }, (_, i) => testTrackSeed(i)));
+  const seen = new Set();
+  for (let i = 0; i < 100; i++) {
+    const seed = validationTrackSeed(i);
+    assert.ok(seed >= 0x80000000, 'höchstes Bit gesetzt: nie eine Trainingsstrecke');
+    assert.ok(!testSeeds.has(seed), 'nicht im Testsatz');
+    assert.ok(!seen.has(seed));
+    seen.add(seed);
+  }
+  for (const t of tracks) assert.deepEqual(validateTrack(t), { ok: true });
+  assert.equal(tracks[0].halfWidth, 9);
+  assert.equal(tracks[99].halfWidth, 5.5);
+});
+
+test('runTest fährt auf Wunsch einen anderen Streckensatz', () => {
+  const t = small();
+  const few = validationTracks().slice(0, 7);
+  const r = runTest(t.genomes[0], t, few);
+  assert.equal(r.perTrack.length, 7);
+  assert.equal(runTest(t.genomes[0], t).perTrack.length, 20);
 });

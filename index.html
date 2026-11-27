@@ -199,7 +199,7 @@ th { font-weight: 600; color: var(--ink-2); }
             <button id="btn-probe" type="button" disabled>Neue Zufallsstrecke</button>
           </div>
           <div class="result" id="probe-msg" hidden></div>
-          <details class="advanced">
+          <details class="advanced" open>
             <summary>Startwert und Mutation</summary>
             <div class="adv-grid">
               <div class="field">
@@ -233,6 +233,7 @@ th { font-weight: 600; color: var(--ink-2); }
             <h2>Netz des führenden Autos</h2>
             <canvas id="cv-net" role="img" aria-label="Neuronales Netz des führenden Autos: 12 Eingaben, zwei Zwischenschichten, 2 Ausgaben"></canvas>
             <p class="muted" style="font-size:13.5px">Links, was das Auto misst. Rechts, was es tut. Rot heißt positiv, blau negativ, kräftige Linien sind starke Verbindungen.</p>
+            <p class="muted" id="champion-note" style="font-size:13.5px;border-top:1px solid var(--line);padding-top:12px">Die Kachel „Teststrecken“ zeigt immer das neueste beste Auto. Der Wert schwankt, weil jede Generation ihr bestes Auto auf nur drei Strecken kürt. Probefahrten und gezeichnete Strecken fährt das Auto mit dem bisher besten Testergebnis.</p>
           </div>
         </aside>
       </div>
