@@ -13,9 +13,10 @@
   --asphalt: #30343d;
   --kerb: #c3c7d1;
   --infield: #eceef2;
-  --car: #8f96a6;
-  --car-out: #c9cdd6;
+  --car: #eef0f4;            /* cars sit on asphalt, which is dark in both themes */
+  --car-out: #717886;
   --lead: #8a2be2;           /* timing-screen purple: fastest on track */
+  --lead-car: #cfa6ff;
   --ray: #8a2be2;
   --series-1: #257de0;       /* training */
   --series-2: #f47230;       /* test tracks */
@@ -30,15 +31,15 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #0d0f13; --surface: #171a20; --ink: #eceef2; --ink-2: #9aa1af; --line: #2a2e38; --grid: #242833;
-    --asphalt: #3d4350; --kerb: #6a7180; --infield: #12151a; --car: #9aa1af; --car-out: #4a505c;
-    --lead: #c08bff; --ray: #c08bff; --series-1: #338ced; --series-2: #e76624; --pos: #eb6263; --neg: #338ced;
+    --asphalt: #3d4350; --kerb: #6a7180; --infield: #12151a; --car: #eef0f4; --car-out: #6a7180;
+    --lead: #c08bff; --lead-car: #d9b8ff; --ray: #c08bff; --series-1: #338ced; --series-2: #e76624; --pos: #eb6263; --neg: #338ced;
     --focus: #6aabf1; --btn: #eceef2; --btn-ink: #0d0f13; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0d0f13; --surface: #171a20; --ink: #eceef2; --ink-2: #9aa1af; --line: #2a2e38; --grid: #242833;
-  --asphalt: #3d4350; --kerb: #6a7180; --infield: #12151a; --car: #9aa1af; --car-out: #4a505c;
-  --lead: #c08bff; --ray: #c08bff; --series-1: #338ced; --series-2: #e76624; --pos: #eb6263; --neg: #338ced;
+  --asphalt: #3d4350; --kerb: #6a7180; --infield: #12151a; --car: #eef0f4; --car-out: #6a7180;
+  --lead: #c08bff; --lead-car: #d9b8ff; --ray: #c08bff; --series-1: #338ced; --series-2: #e76624; --pos: #eb6263; --neg: #338ced;
   --focus: #6aabf1; --btn: #eceef2; --btn-ink: #0d0f13; color-scheme: dark;
 }
 
@@ -152,6 +153,7 @@ th { font-weight: 600; color: var(--ink-2); }
 .result { padding: 10px 16px; border-top: 1px solid var(--line); font-weight: 500; }
 .draw-tools { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; padding: 12px 16px; border-top: 1px solid var(--line); }
 .draw-tools .field { flex: 0 1 220px; }
+#view-zeichnen .panel { max-width: 880px; }
 
 @media (max-width: 860px) {
   .bench { grid-template-columns: minmax(0, 1fr); }
@@ -225,7 +227,7 @@ th { font-weight: 600; color: var(--ink-2); }
           <div class="tiles">
             <div class="tile"><div class="eyebrow">Generation</div><div class="num" id="stat-gen">0</div></div>
             <div class="tile"><div class="eyebrow">Schwierigkeit</div><div class="num"><span id="stat-diff">0</span><small> / 10</small></div><div class="meter" id="diff-meter" aria-hidden="true"></div></div>
-            <div class="tile"><div class="eyebrow">Unbekannte Strecken</div><div class="num"><span id="stat-test">–</span><small> / 20</small></div></div>
+            <div class="tile"><div class="eyebrow">Teststrecken</div><div class="num"><span id="stat-test">–</span><small> / 20</small></div></div>
           </div>
           <div class="panel-pad">
             <h2>Netz des führenden Autos</h2>
@@ -256,7 +258,7 @@ th { font-weight: 600; color: var(--ink-2); }
       <section class="explain" aria-label="Erklärung">
         <div><h3>Was ein Auto sieht</h3><p>Neun Abstände zur Wand, sein Tempo, wie stark es seitlich rutscht und seinen Lenkwinkel. Keine Karte, keine Position, keine Kurve voraus.</p></div>
         <div><h3>Wie gelernt wird</h3><p>Jede Generation fährt drei frisch erzeugte Strecken. Wer in 45 Sekunden am weitesten kommt, gibt seine Gewichte weiter. Wandkontakt beendet die Fahrt.</p></div>
-        <div><h3>Woran man Übertragung erkennt</h3><p>Alle fünf Generationen fährt das beste Auto 20 Strecken, die im Training nie vorkommen. Die orange Linie zeigt, was davon wirklich ankommt.</p></div>
+        <div><h3>Woran man Übertragung erkennt</h3><p>Alle fünf Generationen fährt das beste Auto 20 Teststrecken, die im Training nie vorkommen, von leicht bis schwer. Die orange Linie zeigt, was vom Gelernten dort ankommt.</p></div>
       </section>
     </div>
   </main>
