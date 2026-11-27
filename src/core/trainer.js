@@ -4,18 +4,29 @@ import { createRng, hashSeed, normalizeSeed } from './rng.js';
 import { genomeLength, randomGenome } from './net.js';
 import { generateTrack } from './generator.js';
 import { CAR } from './car.js';
-import { RULES_FAHREN } from './rules.js';
+import { RULES_FAHREN, defaultSeconds } from './rules.js';
 import { createWorld, stepWorld, runToEnd } from './world.js';
 import { EVO_DEFAULTS, nextGeneration } from './evolution.js';
 
 export const TRACKS_PER_GEN = 3;
 export const TEST_EVERY = 5;
 export const TEST_COUNT = 20;
-export const CLEAN_DISTANCE = 600; // metres a clean run must cover
 export const DIFFICULTY_STEP = 0.1;
 export const CLEAN_NEEDED = 2; // of TRACKS_PER_GEN: the majority
 const VERSION = 1;
 const RULE_SETS = { [RULES_FAHREN.id]: RULES_FAHREN };
+
+/** The rule set with this id, or undefined. Saved states name their rule set by id. */
+export function ruleSet(id) {
+  return Object.hasOwn(RULE_SETS, id) ? RULE_SETS[id] : undefined;
+}
+
+/** Driving time of generation `gen`: fixed, or drawn from the rule set's range. */
+function pickSeconds(rules, seed, gen) {
+  const [min, max] = rules.raceSeconds;
+  if (min === max) return min;
+  return createRng(hashSeed(5, seed, gen)).range(min, max);
+}
 
 /** Training track seeds never have the top bit set ... */
 export function trainingTrackSeed(seed, gen, k) {
@@ -66,7 +77,8 @@ export function validationTracks() {
 function startTrack(trainer) {
   const seed = trainingTrackSeed(trainer.seed, trainer.gen, trainer.trackIndex);
   const track = generateTrack(seed, trainer.difficulty);
-  trainer.world = createWorld(track, trainer.rules, trainer.spec, trainer.sizes, trainer.genomes);
+  trainer.raceSeconds = pickSeconds(trainer.rules, trainer.seed, trainer.gen);
+  trainer.world = createWorld(track, trainer.rules, trainer.spec, trainer.sizes, trainer.genomes, { seconds: trainer.raceSeconds });
 }
 
 function resetAccumulators(trainer) {
@@ -90,6 +102,7 @@ export function createTrainer(opts = {}) {
     seed, rules, spec: opts.spec ?? CAR, sizes, evo, rng,
     gen: 0, // generations completed
     difficulty: 0,
+    raceSeconds: 0, // driving time of the running generation
     trackIndex: 0,
     world: null,
     genomes,
@@ -110,18 +123,19 @@ function finishTrack(trainer) {
   for (let i = 0; i < cars.length; i++) {
     const car = cars[i];
     if (car.progress > 0) trainer.distance[i] += car.progress;
-    if (car.endReason === 'zeit' && car.progress >= CLEAN_DISTANCE) trainer.cleanRuns[i]++;
+    if (trainer.rules.clean(car, trainer.world.track)) trainer.cleanRuns[i]++;
   }
   trainer.trackIndex++;
 }
 
 function finishGeneration(trainer) {
   const count = trainer.genomes.length;
-  const seconds = trainer.rules.episodeSeconds;
+  const seconds = trainer.raceSeconds;
+  const tracks = trainer.rules.tracksPerGen;
   const fitness = new Array(count);
   let best = 0, sum = 0;
   for (let i = 0; i < count; i++) {
-    fitness[i] = trainer.distance[i] / TRACKS_PER_GEN;
+    fitness[i] = trainer.distance[i] / tracks;
     sum += fitness[i];
     if (fitness[i] > fitness[best]) best = i;
   }
@@ -135,6 +149,7 @@ function finishGeneration(trainer) {
     best: fitness[best] / seconds, // average speed in m/s
     mean: sum / count / seconds,
     difficulty: trainer.difficulty, // difficulty this generation was driven at
+    seconds, // driving time per track in this generation
     clean: trainer.cleanRuns[best], // clean runs of this generation's best car
     eliteClean: hasElite ? trainer.cleanRuns[0] : null, // clean runs of the previous champion
   };
@@ -172,7 +187,7 @@ export function advance(trainer, maxSteps) {
     }
     if (trainer.world.done) {
       finishTrack(trainer);
-      const generationDone = trainer.trackIndex >= TRACKS_PER_GEN;
+      const generationDone = trainer.trackIndex >= trainer.rules.tracksPerGen;
       if (generationDone) finishGeneration(trainer);
       startTrack(trainer);
       if (generationDone) return true;
@@ -201,7 +216,7 @@ export function runTest(genome, trainer, tracks = testTracks()) {
     runToEnd(lap);
     const timed = createWorld(track, trainer.rules, trainer.spec, trainer.sizes, [genome]);
     runToEnd(timed);
-    const speed = Math.max(0, timed.cars[0].progress) / trainer.rules.episodeSeconds;
+    const speed = Math.max(0, timed.cars[0].progress) / defaultSeconds(trainer.rules);
     const ok = lap.cars[0].endReason === 'runde';
     if (ok) passed++;
     speedSum += speed;
@@ -260,7 +275,7 @@ const isNumber = (v) => typeof v === 'number' && Number.isFinite(v);
 export function restoreTrainer(data) {
   try {
     if (!data || typeof data !== 'object' || data.version !== VERSION) return null;
-    const rules = RULE_SETS[data.rules];
+    const rules = ruleSet(data.rules);
     if (!rules) return null;
     const { sizes, evo, spec } = data;
     if (!Array.isArray(sizes) || sizes.length < 2 || !sizes.every((s) => Number.isInteger(s) && s > 0)) return null;
@@ -297,6 +312,7 @@ export function restoreTrainer(data) {
       seed: data.seed, rules, spec: { ...spec }, sizes: [...sizes], evo: { ...evo }, rng,
       gen: data.gen,
       difficulty: data.difficulty,
+      raceSeconds: 0,
       trackIndex: 0,
       world: null,
       genomes,

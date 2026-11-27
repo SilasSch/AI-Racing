@@ -1,5 +1,5 @@
 // Many cars on one track. They share the track but never affect each other.
-import { DT } from './rules.js';
+import { DT, defaultSeconds } from './rules.js';
 import { sense } from './sensors.js';
 import { forward, createScratch } from './net.js';
 import { createCar, stepCar } from './car.js';
@@ -11,7 +11,8 @@ import { locate, wallDistance } from './track.js';
  * @param {object} spec car spec, e.g. CAR
  * @param {number[]} sizes layer sizes of the driver net
  * @param {Float32Array[]} genomes one car per genome
- * @param {{untilLap?: boolean}} [opts] untilLap: a car's run ends after its first full lap
+ * @param {{untilLap?: boolean, seconds?: number}} [opts] untilLap: a car's run ends after its
+ *   first full lap; seconds: driving time, instead of the rule set's default
  */
 export function createWorld(track, rules, spec, sizes, genomes, opts = {}) {
   const cars = genomes.map((genome) => ({
@@ -35,7 +36,7 @@ export function createWorld(track, rules, spec, sizes, genomes, opts = {}) {
     done: cars.length === 0,
     spacing: track.length / track.n,
     stallSteps: Math.round(rules.stall.seconds / DT),
-    maxSteps: Math.round((opts.untilLap ? rules.lapTimeout : rules.episodeSeconds) / DT),
+    maxSteps: Math.round((opts.untilLap ? rules.lapTimeout : opts.seconds ?? defaultSeconds(rules)) / DT),
   };
 }
 

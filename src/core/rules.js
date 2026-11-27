@@ -9,7 +9,13 @@ const RAY_ANGLES = [-90, -55, -30, -12, 0, 12, 30, 55, 90];
 export const RULES_FAHREN = {
   id: 'fahren',
   wallContact: 'fatal',
+  tracksPerGen: 3,
   episodeSeconds: 45,
+  raceSeconds: [45, 45], // [min, max]; a generation draws its driving time from this range
+  // A clean run: the car lasted the whole time and covered real ground.
+  clean: (car) => car.endReason === 'zeit' && car.progress >= 600,
+  endurance: null, // no wear, fuel or damage in this rule set
+  strategy: null, // no second net
   lapTimeout: 120,
   stall: { seconds: 3, minProgress: 5 },
   rayRange: 150,
@@ -22,3 +28,8 @@ export const RULES_FAHREN = {
     { type: 'steer' },
   ],
 };
+
+/** Driving time of a world when nothing else is asked for: the middle of the range. */
+export function defaultSeconds(rules) {
+  return (rules.raceSeconds[0] + rules.raceSeconds[1]) / 2;
+}
