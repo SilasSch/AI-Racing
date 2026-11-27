@@ -40,7 +40,7 @@ export const RULES_AUSDAUER = {
   id: 'ausdauer',
   wallContact: 'damage',
   tracksPerGen: 3,
-  raceSeconds: [200, 320],
+  raceSeconds: [240, 400],
   lapTimeout: 150,
   stall: { seconds: 4, minProgress: 5 },
   rayRange: 150,

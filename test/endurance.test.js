@@ -46,9 +46,18 @@ test('Tempovorgabe 0 senkt die Leistung auf minPower und den Verbrauch überprop
   car.energy = 1e6; car.load = 0;
   wearAndBurn(full, car, E, 1 / 30);
   wearAndBurn(eco, car, E, 1 / 30);
-  const burnFull = E.tank - full.fuel, burnEco = E.tank - eco.fuel;
-  near(burnFull, E.burn * 1e6, 1e-9);
-  near(burnEco / burnFull, 1 - E.paceBurn, 1e-9);
+  const idle = E.idle / 30; // the engine burns this much just for running
+  const burnFull = E.tank - full.fuel - idle, burnEco = E.tank - eco.fuel - idle;
+  near(burnFull, E.burn * 1e6, 1e-6);
+  near(burnEco / burnFull, 1 - E.paceBurn, 1e-6);
+});
+
+test('Leerlauf verbraucht auch: selbst ohne Motorarbeit reicht ein Tank nicht ewig', () => {
+  const cond = createCondition(E);
+  const car = createCar({ x: 0, y: 0, heading: 0 });
+  for (let i = 0; i < 300; i++) wearAndBurn(cond, car, E, 1 / 30);
+  near(E.tank - cond.fuel, E.idle * 10, 1e-6);
+  assert.ok(E.tank / E.idle < 400, 'ein Tank im Leerlauf muss kürzer halten als das längste Rennen');
 });
 
 test('Verschleiß wächst mit der Last und beim Rutschen schneller', () => {

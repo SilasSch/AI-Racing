@@ -48,7 +48,7 @@ test('Regelsatz ausdauer: 15 Kanäle, Wandkontakt als Schaden, Strategie-Netz', 
   assert.deepEqual(RULES_AUSDAUER.channels.slice(12).map((c) => c.type), ['grip', 'fuel', 'pace']);
   assert.deepEqual(RULES_AUSDAUER.channels.slice(0, 12), RULES_FAHREN.channels);
   assert.equal(RULES_AUSDAUER.wallContact, 'damage');
-  assert.deepEqual(RULES_AUSDAUER.raceSeconds, [200, 320]);
+  assert.deepEqual(RULES_AUSDAUER.raceSeconds, [240, 400]);
   assert.deepEqual(RULES_AUSDAUER.strategy.sizes, STRATEGY_SIZES);
   assert.equal(RULES_AUSDAUER.clean({ endReason: 'zeit', progress: 700 }, { length: 628 }), true);
   assert.equal(RULES_AUSDAUER.clean({ endReason: 'zeit', progress: 600 }, { length: 628 }), false);
@@ -143,7 +143,8 @@ test('Reifenwechsel nur wenn gewählt; Reparatur setzt Schaden zurück', () => {
 });
 
 test('Entscheidung fällt einmal am Start und einmal pro Runde', () => {
-  const w = race(NEVER, { seconds: 320 }, { endurance: ENDURANCE });
+  const frugal = { ...ENDURANCE, idle: 0, burn: 1e-6 }; // a tank that lasts the whole race
+  const w = race(NEVER, { seconds: 320 }, { endurance: frugal });
   runToEnd(w);
   const c = w.cars[0];
   assert.equal(c.endReason, 'zeit');

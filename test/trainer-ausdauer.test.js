@@ -18,13 +18,13 @@ test('Ausdauer-Trainer: Genom = Fahrer [15,16,16,2] + Strategie [7,8,4]', () => 
   assert.equal(ruleSet('ausdauer'), RULES_AUSDAUER);
 });
 
-test('Rennlänge je Generation liegt in [200, 320] und wechselt', () => {
+test('Rennlänge je Generation liegt in [240, 400] und wechselt', () => {
   const t = small();
   const seen = new Set();
   for (let i = 0; i < 3; i++) {
-    assert.ok(t.raceSeconds >= 200 && t.raceSeconds <= 320, `seconds ${t.raceSeconds}`);
+    assert.ok(t.raceSeconds >= 240 && t.raceSeconds <= 400, `seconds ${t.raceSeconds}`);
     const s = runGeneration(t);
-    assert.ok(s.seconds >= 200 && s.seconds <= 320);
+    assert.ok(s.seconds >= 240 && s.seconds <= 400);
     seen.add(s.seconds);
   }
   assert.equal(seen.size, 3);

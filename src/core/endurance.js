@@ -1,15 +1,21 @@
 // What makes a race long: tyres wear, fuel burns and weighs, walls leave damage.
 import { wallDistance } from './track.js';
 
-/** Starting values; stage 2's tuning step calibrates the rates against measured lap times. */
+/**
+ * Rates calibrated against how trained cars really drive (docs/stufe-2-nachweis.md):
+ * they use about 25 kW of 300 and a lap takes 50 to 90 s. At full pace a tank lasts about
+ * 100 s, in economy about twice that but much slower, so every race needs a stop.
+ * Tyres reach the cliff after about 220 s.
+ */
 export const ENDURANCE = {
   tank: 110, // kg of fuel when full
-  burn: 2.4e-6, // kg per joule of engine work
-  paceBurn: 0.3, // at pace 0 a joule costs this much less fuel
-  minPower: 0.7, // engine power at pace 0, as a share of full power
-  wearBase: 0.0012, // tyre wear per second just for rolling
-  wearLoad: 0.0035, // extra wear per second at full tyre load
-  wearSlip: 0.0004, // extra wear per second per m/s of sideways sliding
+  idle: 0.36, // kg per second just for running the engine
+  burn: 3e-5, // kg per joule of engine work
+  paceBurn: 0.1, // at pace 0 a joule costs this much less fuel
+  minPower: 0.06, // engine power at pace 0, as a share of full power
+  wearBase: 0.0016, // tyre wear per second just for rolling
+  wearLoad: 0.009, // extra wear per second at full tyre load
+  wearSlip: 0.001, // extra wear per second per m/s of sideways sliding
   cliff: 0.75, // wear at which the grip starts to fall steeply
   gripWorn: 0.94, // grip factor at the cliff
   gripFloor: 0.6, // grip factor of a finished tyre
@@ -45,7 +51,7 @@ export function carCondition(cond, spec, e, out) {
 export function wearAndBurn(cond, car, e, dt) {
   const slip = car.vy < 0 ? -car.vy : car.vy;
   cond.wear += (e.wearBase + e.wearLoad * car.load * car.load + e.wearSlip * slip) * dt;
-  const fuel = cond.fuel - e.burn * car.energy * (1 - e.paceBurn * (1 - cond.pace));
+  const fuel = cond.fuel - e.idle * dt - e.burn * car.energy * (1 - e.paceBurn * (1 - cond.pace));
   cond.fuel = fuel > 0 ? fuel : 0;
 }
 

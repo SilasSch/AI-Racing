@@ -9,6 +9,7 @@
     "serve": "node scripts/serve.js",
     "bench": "node scripts/bench.js",
     "proof": "node scripts/proof.js",
+    "proof:ausdauer": "node scripts/proof-ausdauer.js",
     "smoke": "node scripts/smoke.cjs"
   }
 }

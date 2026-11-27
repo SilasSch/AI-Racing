@@ -2,7 +2,7 @@
 import { createTrainer, runGeneration } from '../src/core/trainer.js';
 import { generateTrack } from '../src/core/generator.js';
 import { createWorld, stepWorld } from '../src/core/world.js';
-import { RULES_FAHREN } from '../src/core/rules.js';
+import { RULES_FAHREN, RULES_AUSDAUER } from '../src/core/rules.js';
 import { CAR } from '../src/core/car.js';
 
 // 1) Raw speed: 60 cars that all stay alive (a trained population), fixed number of world steps.
@@ -26,3 +26,9 @@ console.log(`car-steps/s: ${Math.round(carSteps / seconds).toLocaleString('en-US
 const g0 = performance.now();
 for (let i = 0; i < 10; i++) runGeneration(trainer);
 console.log(`ms/Generation: ${Math.round((performance.now() - g0) / 10)} (Generationen 26-35, Schwierigkeit ${trainer.difficulty})`);
+
+// 3) Endurance, starting from the drivers trained above.
+const endurance = createTrainer({ seed: 1, rules: RULES_AUSDAUER, drivers: { genomes: trainer.genomes, sizes: trainer.sizes, difficulty: trainer.difficulty } });
+const e0 = performance.now();
+for (let i = 0; i < 10; i++) runGeneration(endurance);
+console.log(`ms/Generation Ausdauer: ${Math.round((performance.now() - e0) / 10)} (10 Generationen ab trainierten Fahrern)`);
