@@ -2,7 +2,11 @@
 // nodes coloured by their current activation.
 import { fitCanvas } from './theme.js';
 
-const INPUT_LABELS = { ray: (ch) => `${ch.angle > 0 ? '+' : ''}${ch.angle}°`, speed: () => 'Tempo', slip: () => 'Rutschen', steer: () => 'Lenkwinkel' };
+const INPUT_LABELS = {
+  ray: (ch) => `${ch.angle > 0 ? '+' : ''}${ch.angle}°`,
+  speed: () => 'Tempo', slip: () => 'Rutschen', steer: () => 'Lenkwinkel',
+  grip: () => 'Haftung', fuel: () => 'Sprit', pace: () => 'Vorgabe',
+};
 const OUTPUT_LABELS = ['Lenken', 'Gas / Bremse'];
 
 function mix(theme, value) {

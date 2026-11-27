@@ -115,12 +115,15 @@ export function createChart(svg, tip, table) {
   }
 
   function renderTable() {
-    const rows = ['<tr><th>Generation</th><th>Strecken geschafft</th><th>Tempo Test (km/h)</th><th>Tempo Training (km/h)</th><th>Schwierigkeit</th></tr>'];
+    const endurance = history.some((h) => Number.isFinite(h.stops));
+    const extraHead = endurance ? '<th>Stopps je Rennen</th><th>Ausfälle</th>' : '';
+    const rows = [`<tr><th>Generation</th><th>Strecken geschafft</th><th>Tempo Test (km/h)</th><th>Tempo Training (km/h)</th><th>Schwierigkeit</th>${extraHead}</tr>`];
     for (const t of tests) {
       const h = history[t.gen - 1];
-      rows.push(`<tr><td>${t.gen}</td><td>${t.passed} / 20</td><td>${fmt(t.meanSpeed * KMH)}</td><td>${h ? fmt(h.best * KMH) : '–'}</td><td>${h ? Math.round(h.difficulty * 10) : '–'} / 10</td></tr>`);
+      const extra = endurance ? `<td>${h && Number.isFinite(h.stops) ? fmt(h.stops, 1) : '–'}</td><td>${h && Number.isFinite(h.retired) ? `${Math.round(h.retired)} / 3` : '–'}</td>` : '';
+      rows.push(`<tr><td>${Math.round(t.gen)}</td><td>${Math.round(t.passed)} / 20</td><td>${fmt(Number(t.meanSpeed) * KMH)}</td><td>${h ? fmt(h.best * KMH) : '–'}</td><td>${h ? Math.round(h.difficulty * 10) : '–'} / 10</td>${extra}</tr>`);
     }
-    if (!tests.length) rows.push('<tr><td colspan="5" style="text-align:left">Der erste Test kommt nach Generation 5.</td></tr>');
+    if (!tests.length) rows.push(`<tr><td colspan="${endurance ? 7 : 5}" style="text-align:left">Der erste Test kommt nach Generation 5.</td></tr>`);
     table.innerHTML = rows.join('');
   }
 
@@ -156,6 +159,9 @@ export function createChart(svg, tip, table) {
       tip.append(tipRow('Test', `${fmt(test.meanSpeed * KMH)} km/h`, 'test'), tipRow('Geschafft', `${test.passed} / 20`, 'test'));
     }
     tip.append(tipRow('Schwierigkeit', `${Math.round(h.difficulty * 10)} / 10`, 'none'));
+    if (Number.isFinite(h.stops)) {
+      tip.append(tipRow('Stopps je Rennen', fmt(h.stops, 1), 'none'), tipRow('Ausfälle', `${Math.round(h.retired)} / 3`, 'none'));
+    }
     tip.hidden = false;
     const scale = svg.clientWidth / svg.viewBox.baseVal.width;
     const left = cx * scale;

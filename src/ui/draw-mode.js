@@ -24,6 +24,7 @@ export function initDrawMode({ getTheme, getChampion }) {
   let visible = false;
   let lastFrame = 0;
   let driver = ''; // label of the car that is driving
+  let modeName = '';
   const driveState = { carry: 0 };
 
   const halfWidth = () => Number(widthInput.value);
@@ -134,6 +135,7 @@ export function initDrawMode({ getTheme, getChampion }) {
     if (!track || !champion) return;
     world = createWorld(track, champion.rules, champion.spec, champion.sizes, [champion.genome], { untilLap: true });
     driver = champion.label;
+    modeName = champion.modeName;
     driveState.carry = 0;
     result.hidden = true;
     message.textContent = `${driver} fährt deine Strecke zum ersten Mal.`;
@@ -147,7 +149,7 @@ export function initDrawMode({ getTheme, getChampion }) {
     const delta = Math.min(100, now - lastFrame);
     lastFrame = now;
     if (driveFrame(world, delta, DRIVE_SPEED, driveState)) {
-      result.textContent = `${driver} auf deiner Strecke: ${describeRun(world.cars[0], track)}`;
+      result.textContent = `${driver} auf deiner Strecke, Modus ${modeName}: ${describeRun(world.cars[0], track)}`;
       result.hidden = false;
       message.textContent = '';
       refreshControls();

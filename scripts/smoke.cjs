@@ -275,6 +275,183 @@ async function waitGen(page, min, ms) {
       if (errs.length) throw new Error(errs.join(' | '));
     });
 
+    // ---------- Ausdauer ----------
+    const ctx2 = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const p2 = await ctx2.newPage();
+    const errors2 = [];
+    p2.on('console', (m) => { if (m.type() === 'error') errors2.push(m.text()); });
+    p2.on('pageerror', (e) => errors2.push(String(e)));
+    const noErrors2 = () => { if (errors2.length) { const e = errors2.splice(0).join(' | '); throw new Error(e); } };
+    const visible = (pg, sel) => pg.isVisible(sel);
+
+    await check('Ausdauer ohne trainierte Fahrer: Auswahl erklärt, warum nur der Start von null geht', async () => {
+      await p2.goto(URL);
+      await p2.waitForSelector('#stat-gen');
+      if (await visible(p2, '#gauges')) throw new Error('Anzeigen im Modus Fahren sichtbar');
+      if (await visible(p2, '#speed-16')) throw new Error('16x im Modus Fahren sichtbar');
+      await p2.click('#mode-ausdauer');
+      await p2.waitForSelector('#start-choice', { state: 'visible' });
+      if (!(await p2.isDisabled('#btn-from-drivers'))) throw new Error('Fahrer-Knopf aktiv');
+      const why = await p2.textContent('#start-choice');
+      if (!/20 Generationen/.test(why)) throw new Error(`keine Begründung: ${why}`);
+      if (!(await p2.isDisabled('#btn-start'))) throw new Error('Start ohne Auswahl aktiv');
+      noErrors2();
+    });
+
+    await check('Ausdauer von null: Rennen laufen, Anzeigen und 16x sind da', async () => {
+      await p2.click('#btn-from-zero');
+      await p2.waitForSelector('#start-choice', { state: 'hidden' });
+      for (const id of ['#gauges', '#g-fuel', '#g-tyres', '#g-damage', '#radio', '#speed-16', '#stat-stops']) {
+        if (!(await visible(p2, id))) throw new Error(`${id} nicht sichtbar`);
+      }
+      await p2.click('#speed-16');
+      await p2.click('#btn-start');
+      await p2.waitForTimeout(1500);
+      const radio = (await p2.textContent('#radio')).trim();
+      if (!/Tempo \d+ %/.test(radio)) throw new Error(`Boxenfunk: ${radio}`);
+      await p2.click('#speed-max');
+      await waitGen(p2, 1, 120000);
+      noErrors2();
+    });
+
+    await check('jeder Modus hat seinen eigenen Stand', async () => {
+      await p2.click('#mode-fahren');
+      if ((await gen(p2)) !== 0) throw new Error('Fahren zeigt nicht 0');
+      if (await visible(p2, '#gauges')) throw new Error('Anzeigen im Modus Fahren sichtbar');
+      if (await visible(p2, '#stat-stops')) throw new Error('Stopps im Modus Fahren sichtbar');
+      await p2.click('#speed-max');
+      await p2.click('#btn-start');
+      await waitGen(p2, 20, 120000);
+      await p2.click('#btn-start'); // pause
+      const fahren = await gen(p2);
+      await p2.click('#mode-ausdauer');
+      const ausdauer = await gen(p2);
+      if (ausdauer < 1 || ausdauer >= fahren) throw new Error(`Ausdauer zeigt ${ausdauer}, Fahren ${fahren}`);
+      noErrors2();
+    });
+
+    await check('Ausdauer mit meinen Fahrern: Stopps und Boxenfunk erscheinen', async () => {
+      await p2.click('#btn-reset');
+      await p2.waitForSelector('#start-choice', { state: 'visible' });
+      if (await p2.isDisabled('#btn-from-drivers')) throw new Error('Fahrer-Knopf bleibt aus');
+      await p2.click('#btn-from-drivers');
+      await p2.waitForSelector('#start-choice', { state: 'hidden' });
+      if ((await gen(p2)) !== 0) throw new Error('nicht bei Generation 0');
+      const level = Number((await p2.textContent('#stat-diff')).trim());
+      if (!(level >= 1)) throw new Error(`Schwierigkeit nicht übernommen: ${level}`);
+      await p2.click('#speed-max');
+      await p2.click('#btn-start');
+      await waitGen(p2, 1, 180000);
+      await p2.click('#btn-start'); // pause
+      const stops = (await p2.textContent('#stat-stops')).trim();
+      if (!/^\d+(,\d)?$/.test(stops)) throw new Error(`Stopps: ${stops}`);
+      noErrors2();
+    });
+
+    await check('Probefahrt im Ausdauer-Modus nennt den Modus', async () => {
+      await p2.click('#speed-max');
+      await p2.click('#btn-probe');
+      await p2.waitForFunction(() => {
+        const el = document.querySelector('#probe-msg');
+        return !el.hidden && /Runde geschafft|Schaden|Stehen geblieben|Zeit abgelaufen|Tank leer/.test(el.textContent);
+      }, null, { timeout: 60000 });
+      const told = await p2.textContent('#probe-msg');
+      if (!/Ausdauer/.test(told)) throw new Error(`nennt den Modus nicht: ${told}`);
+      noErrors2();
+    });
+
+    await check('Moduswechsel während einer Probefahrt beendet sie sauber', async () => {
+      await p2.click('#speed-1');
+      await p2.click('#btn-probe');
+      await p2.waitForTimeout(400);
+      await p2.click('#mode-fahren');
+      if (await visible(p2, '#probe-msg')) throw new Error('Meldung der Probefahrt bleibt stehen');
+      if ((await gen(p2)) < 20) throw new Error('Fahren-Stand verloren');
+      await p2.click('#mode-ausdauer');
+      if ((await gen(p2)) < 1) throw new Error('Ausdauer-Stand verloren');
+      noErrors2();
+    });
+
+    let savedAusdauer = null;
+    await check('Neuladen: beide Stände bleiben, der Modus auch', async () => {
+      await p2.reload();
+      await p2.waitForSelector('#stat-gen');
+      if (!(await visible(p2, '#gauges'))) throw new Error('Modus Ausdauer nicht gemerkt');
+      if ((await gen(p2)) < 1) throw new Error('Ausdauer-Stand weg');
+      await p2.click('#mode-fahren');
+      if ((await gen(p2)) < 20) throw new Error('Fahren-Stand weg');
+      savedAusdauer = await p2.evaluate(() => localStorage.getItem('rennlabor:ausdauer'));
+      if (!savedAusdauer) throw new Error('kein gespeicherter Ausdauer-Stand');
+      noErrors2();
+    });
+
+    await check('Ausdauer bei 400 px: kein horizontales Scrollen', async () => {
+      await p2.click('#mode-ausdauer');
+      await p2.setViewportSize({ width: 400, height: 800 });
+      await p2.waitForTimeout(300);
+      const over = await p2.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      if (over > 0) throw new Error(`${over} px zu breit`);
+      if (process.env.SMOKE_SHOTS) await p2.screenshot({ path: path.join(process.env.SMOKE_SHOTS, 'ausdauer-phone.png'), fullPage: true });
+      await p2.setViewportSize({ width: 1280, height: 900 });
+      await p2.waitForTimeout(300);
+      if (process.env.SMOKE_SHOTS) await p2.screenshot({ path: path.join(process.env.SMOKE_SHOTS, 'ausdauer.png'), fullPage: true });
+      noErrors2();
+    });
+    await ctx2.close();
+
+    const withStorage = async (entries, fn) => {
+      const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+      await ctx.addInitScript((kv) => { try { for (const [k, v] of Object.entries(kv)) localStorage.setItem(k, v); } catch { /* ignore */ } }, entries);
+      const pg = await ctx.newPage();
+      const errs = [];
+      pg.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
+      pg.on('pageerror', (e) => errs.push(String(e)));
+      await pg.goto(URL);
+      await pg.waitForSelector('#stat-gen');
+      try { await fn(pg); } finally { await ctx.close(); }
+      if (errs.length) throw new Error(errs.join(' | '));
+    };
+
+    await check('kaputter Ausdauer-Stand: Auswahl erscheint, Seite bleibt bedienbar', async () => {
+      await withStorage({ 'rennlabor:ausdauer': '{kaputt' }, async (pg) => {
+        await pg.click('#mode-ausdauer');
+        await pg.waitForSelector('#start-choice', { state: 'visible' });
+        await pg.click('#mode-fahren');
+        if (await pg.isDisabled('#btn-start')) throw new Error('Fahren nicht bedienbar');
+      });
+    });
+
+    await check('Fahren-Stand unter dem Ausdauer-Schlüssel wird nicht geladen', async () => {
+      const fahrenState = await page.evaluate(() => localStorage.getItem('rennlabor:fahren'));
+      await withStorage({ 'rennlabor:ausdauer': fahrenState }, async (pg) => {
+        await pg.click('#mode-ausdauer');
+        await pg.waitForSelector('#start-choice', { state: 'visible' });
+      });
+    });
+
+    await check('kaputter Fahren-Stand neben gutem Ausdauer-Stand: beide Modi bedienbar', async () => {
+      await withStorage({ 'rennlabor:fahren': '{kaputt', 'rennlabor:ausdauer': savedAusdauer, 'rennlabor:modus': JSON.stringify('ausdauer') }, async (pg) => {
+        if (Number((await pg.textContent('#stat-gen')).trim()) < 1) throw new Error('Ausdauer-Stand nicht geladen');
+        await pg.click('#mode-fahren');
+        if (Number((await pg.textContent('#stat-gen')).trim()) !== 0) throw new Error('Fahren nicht frisch');
+        if (await pg.isDisabled('#btn-start')) throw new Error('Fahren nicht bedienbar');
+      });
+    });
+
+    await check('Übernahme scheitert bei unpassenden Fahrern: Hinweis, Start von null', async () => {
+      const fahrenState = JSON.parse(await page.evaluate(() => localStorage.getItem('rennlabor:fahren')));
+      fahrenState.gen = Math.max(25, fahrenState.gen);
+      fahrenState.difficulty = 7; // not a difficulty: the drivers do not fit
+      await withStorage({ 'rennlabor:fahren': JSON.stringify(fahrenState) }, async (pg) => {
+        await pg.click('#mode-ausdauer');
+        await pg.waitForSelector('#start-choice', { state: 'visible' });
+        // the damaged state is rejected on load, so "fahren" is fresh and the driver button is off
+        if (!(await pg.isDisabled('#btn-from-drivers'))) throw new Error('Fahrer-Knopf aktiv trotz kaputtem Stand');
+        await pg.click('#btn-from-zero');
+        await pg.waitForSelector('#gauges', { state: 'visible' });
+      });
+    });
+
     await check('400 px breit: kein horizontales Scrollen', async () => {
       await page.setViewportSize({ width: 400, height: 800 });
       await page.waitForTimeout(300);

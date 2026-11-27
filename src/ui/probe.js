@@ -17,6 +17,10 @@ export function describeRun(car, track) {
       return `Wandkontakt nach ${fmt(metres)} von ${fmt(lap)} Metern.`;
     case 'stillstand':
       return `Stehen geblieben nach ${fmt(metres)} von ${fmt(lap)} Metern.`;
+    case 'schaden':
+      return `Zu viel Schaden nach ${fmt(metres)} von ${fmt(lap)} Metern.`;
+    case 'sprit':
+      return `Tank leer nach ${fmt(metres)} von ${fmt(lap)} Metern.`;
     default:
       return `Zeit abgelaufen nach ${fmt(metres)} von ${fmt(lap)} Metern.`;
   }
@@ -59,7 +63,7 @@ export function initProbe({ trackView, netView, getChampion, pause, takeOver, re
       step(deltaMs, speed) {
         if (world.done) return;
         if (driveFrame(world, deltaMs, speed, state)) {
-          message.textContent = `${champion.label} auf einer neuen Strecke, Schwierigkeit ${level} von 10: ${describeRun(world.cars[0], track)}`;
+          message.textContent = `${champion.label} auf einer neuen Strecke, Modus ${champion.modeName}, Schwierigkeit ${level} von 10: ${describeRun(world.cars[0], track)}`;
           message.hidden = false;
         }
       },
