@@ -1,0 +1,14 @@
+{
+  "name": "ai-racing",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Neuroevolution racing lab: small neural nets learn to drive in the browser",
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "serve": "node scripts/serve.js",
+    "bench": "node scripts/bench.js",
+    "proof": "node scripts/proof.js",
+    "smoke": "node scripts/smoke.cjs"
+  }
+}

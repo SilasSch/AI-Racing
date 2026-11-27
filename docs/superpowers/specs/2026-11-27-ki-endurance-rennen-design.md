@@ -157,6 +157,11 @@ Zahlenwerte (Leistung, Masse, Haftung, Zeitschritt) legt der Erbauer fest und st
 sie so ab, dass eine Runde auf einer mittleren Strecke grob 20–30 simulierte
 Sekunden dauert und Bremsen vor engen Kurven nötig ist.
 
+> Stand nach Stufe 1: Der Richtwert wird verfehlt. Gemessen sind 45–75 Sekunden pro
+> Runde, weil die Autos vorsichtig fahren; kürzere Strecken ändern daran nichts.
+> Einzelheiten in `docs/stufe-1-nachweis.md`. Stufe 2 rechnet mit gemessenen
+> Rundenzeiten.
+
 ### 6.4 Was das Fahrer-Netz sieht
 
 Nur Größen, die ein Auto selbst messen könnte:
