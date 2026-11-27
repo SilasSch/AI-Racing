@@ -137,29 +137,38 @@ function pickStart(xs, ys, curv, n) {
 }
 
 /**
+ * Centerline only, without the distance field. Enough for validateTrack.
  * @param {{x:number,y:number}[]} points control points of the closed loop, in driving order
  * @param {number} halfWidth metres from centerline to wall
  */
-export function buildTrack(points, halfWidth) {
+export function buildGeometry(points, halfWidth) {
   const { dx, dy } = splineDense(points);
   const { xs, ys, n } = resampleClosed(dx, dy);
   let length = 0;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (let i = 0; i < n; i++) {
     const j = (i + 1) % n;
     length += Math.hypot(xs[j] - xs[i], ys[j] - ys[i]);
-  }
-  const field = buildField(xs, ys, n, halfWidth);
-  const curv = curvatures(xs, ys, n);
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (let i = 0; i < n; i++) {
     minX = Math.min(minX, xs[i]); maxX = Math.max(maxX, xs[i]);
     minY = Math.min(minY, ys[i]); maxY = Math.max(maxY, ys[i]);
   }
+  const curv = curvatures(xs, ys, n);
   return {
-    n, xs, ys, length, halfWidth, curv, field,
+    n, xs, ys, length, halfWidth, curv, field: null,
     bounds: { minX: minX - halfWidth, minY: minY - halfWidth, maxX: maxX + halfWidth, maxY: maxY + halfWidth },
     start: pickStart(xs, ys, curv, n),
   };
+}
+
+/** Adds the distance field that wallDistance and castRay need. */
+export function attachField(track) {
+  if (!track.field) track.field = buildField(track.xs, track.ys, track.n, track.halfWidth);
+  return track;
+}
+
+/** Full track: centerline plus distance field. */
+export function buildTrack(points, halfWidth) {
+  return attachField(buildGeometry(points, halfWidth));
 }
 
 /** Distance to the nearest wall: positive on the road, <= 0 outside. */
