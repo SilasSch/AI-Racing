@@ -28,10 +28,13 @@ export function createScratch(sizes) {
   return scratch;
 }
 
-/** Returns scratch.at(-1). Activations of every layer stay readable in scratch. */
-export function forward(genome, sizes, input, scratch) {
+/**
+ * Returns scratch.at(-1). Activations of every layer stay readable in scratch.
+ * `offset`: where this net's weights start in the genome (a genome may hold several nets).
+ */
+export function forward(genome, sizes, input, scratch, offset = 0) {
   let prev = input;
-  let p = 0;
+  let p = offset;
   for (let l = 1; l < sizes.length; l++) {
     const nin = sizes[l - 1];
     const nout = sizes[l];
