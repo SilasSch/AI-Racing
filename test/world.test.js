@@ -33,9 +33,10 @@ test('sense: 12 Werte in [-1,1], Strahl nach vorn sieht weiter als die seitliche
   const out = new Float32Array(12);
   sense(track, car, RULES_FAHREN, CAR, out);
   for (const v of out) assert.ok(v >= -1 && v <= 1 && Number.isFinite(v));
-  near(out[0], 8 / 150, 0.01);  // -90°: straight at the wall
-  near(out[8], 8 / 150, 0.01);  // +90°
-  assert.ok(out[4] > out[0] * 3); // 0°: along the track
+  // rays report sqrt(distance / range): fine resolution close to a wall
+  near(out[0], Math.sqrt(8 / 150), 0.02);  // -90°: straight at the wall
+  near(out[8], Math.sqrt(8 / 150), 0.02);  // +90°
+  assert.ok(out[4] > out[0] * 1.7); // 0°: along the track
   near(out[9], 0.5, 1e-6);
   near(out[10], -0.15, 1e-6);
   near(out[11], 0.5, 1e-6);

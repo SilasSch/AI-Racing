@@ -10,7 +10,9 @@ export function sense(track, car, rules, spec, out) {
     const ch = channels[i];
     switch (ch.type) {
       case 'ray':
-        out[i] = castRay(track, car.x, car.y, car.heading + ch.angle * RAD, rules.rayRange) / rules.rayRange;
+        // Square root: a metre more or less matters most close to a wall,
+        // so that is where the signal gets its resolution.
+        out[i] = Math.sqrt(castRay(track, car.x, car.y, car.heading + ch.angle * RAD, rules.rayRange) / rules.rayRange);
         break;
       case 'speed':
         out[i] = Math.min(1, car.vx / 80);
