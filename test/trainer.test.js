@@ -135,6 +135,22 @@ test('runTest zählt nur volle Runden', () => {
   assert.ok(Number.isFinite(r.meanSpeed));
 });
 
+test('runTest misst Tempo wie das Training: Distanz in fester Zeit', async () => {
+  const { createWorld, runToEnd } = await import('../src/core/world.js');
+  const t = createTrainer({ seed: 1 });
+  for (let i = 0; i < 6; i++) runGeneration(t);
+  const r = runTest(t.champion, t);
+  let sum = 0;
+  testTracks().forEach((track, i) => {
+    const w = createWorld(track, t.rules, t.spec, t.sizes, [t.champion]);
+    runToEnd(w);
+    const speed = Math.max(0, w.cars[0].progress) / t.rules.episodeSeconds;
+    assert.ok(Math.abs(r.perTrack[i].speed - speed) < 1e-9, `Strecke ${i}`);
+    sum += speed;
+  });
+  assert.ok(Math.abs(r.meanSpeed - sum / 20) < 1e-9);
+});
+
 test('nach jeder 5. Generation wird getestet', () => {
   const t = small();
   for (let i = 0; i < 5; i++) runGeneration(t);

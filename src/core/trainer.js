@@ -165,21 +165,24 @@ export function runGeneration(trainer) {
 }
 
 /**
- * Drives `genome` once around each test track.
+ * Measures `genome` on the test tracks, in two ways per track:
+ * a lap attempt (ok = full lap without touching a wall), and the same measure
+ * training uses (distance in the fixed episode time), so the two curves compare.
  * @returns {{passed:number, meanSpeed:number, perTrack:{ok:boolean,reason:string,speed:number}[]}}
  */
 export function runTest(genome, trainer) {
   const perTrack = [];
   let passed = 0, speedSum = 0;
   for (const track of testTracks()) {
-    const world = createWorld(track, trainer.rules, trainer.spec, trainer.sizes, [genome], { untilLap: true });
-    runToEnd(world);
-    const car = world.cars[0];
-    const speed = car.time > 0 ? Math.max(0, car.progress) / car.time : 0;
-    const ok = car.endReason === 'runde';
+    const lap = createWorld(track, trainer.rules, trainer.spec, trainer.sizes, [genome], { untilLap: true });
+    runToEnd(lap);
+    const timed = createWorld(track, trainer.rules, trainer.spec, trainer.sizes, [genome]);
+    runToEnd(timed);
+    const speed = Math.max(0, timed.cars[0].progress) / trainer.rules.episodeSeconds;
+    const ok = lap.cars[0].endReason === 'runde';
     if (ok) passed++;
     speedSum += speed;
-    perTrack.push({ ok, reason: car.endReason, speed });
+    perTrack.push({ ok, reason: lap.cars[0].endReason, speed });
   }
   return { passed, meanSpeed: speedSum / perTrack.length, perTrack };
 }
