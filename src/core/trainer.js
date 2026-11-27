@@ -4,8 +4,8 @@ import { createRng, hashSeed, normalizeSeed } from './rng.js';
 import { genomeLength, randomGenome } from './net.js';
 import { generateTrack } from './generator.js';
 import { CAR } from './car.js';
-import { RULES_FAHREN, defaultSeconds } from './rules.js';
-import { createWorld, stepWorld, runToEnd } from './world.js';
+import { RULES_FAHREN, RULES_AUSDAUER, defaultSeconds } from './rules.js';
+import { createWorld, stepWorld, runToEnd, genomeLengthFor } from './world.js';
 import { EVO_DEFAULTS, nextGeneration } from './evolution.js';
 
 export const TRACKS_PER_GEN = 3;
@@ -14,7 +14,7 @@ export const TEST_COUNT = 20;
 export const DIFFICULTY_STEP = 0.1;
 export const CLEAN_NEEDED = 2; // of TRACKS_PER_GEN: the majority
 const VERSION = 1;
-const RULE_SETS = { [RULES_FAHREN.id]: RULES_FAHREN };
+const RULE_SETS = { [RULES_FAHREN.id]: RULES_FAHREN, [RULES_AUSDAUER.id]: RULES_AUSDAUER };
 
 /** The rule set with this id, or undefined. Saved states name their rule set by id. */
 export function ruleSet(id) {
@@ -82,26 +82,83 @@ function startTrack(trainer) {
 }
 
 function resetAccumulators(trainer) {
+  const count = trainer.genomes.length;
   trainer.trackIndex = 0;
-  trainer.distance = new Float64Array(trainer.genomes.length);
-  trainer.cleanRuns = new Uint8Array(trainer.genomes.length);
+  trainer.distance = new Float64Array(count);
+  trainer.cleanRuns = new Uint8Array(count);
+  if (trainer.rules.endurance) {
+    trainer.stops = new Float64Array(count);
+    trainer.laps = new Float64Array(count);
+    trainer.retired = new Uint8Array(count);
+  }
 }
 
 /**
- * @param {{seed?:unknown, rules?:object, spec?:object, hidden?:number[], evo?:object}} [opts]
+ * A driver net with more inputs: the weights of the inputs it already had stay,
+ * the new inputs start at weight zero, so it drives exactly as before.
+ * @returns {Float32Array|null} null if the nets do not fit together
+ */
+export function expandDriver(genome, fromSizes, toSizes) {
+  if (!genome || !Array.isArray(fromSizes) || !Array.isArray(toSizes)) return null;
+  if (fromSizes.length !== toSizes.length || toSizes[0] < fromSizes[0]) return null;
+  for (let l = 1; l < fromSizes.length; l++) if (fromSizes[l] !== toSizes[l]) return null;
+  if (genome.length !== genomeLength(fromSizes)) return null;
+  const out = new Float32Array(genomeLength(toSizes));
+  const oldIn = fromSizes[0], newIn = toSizes[0], hidden = fromSizes[1];
+  let p = 0, q = 0;
+  for (let j = 0; j < hidden; j++) {
+    for (let i = 0; i < oldIn; i++) out[q + i] = genome[p + i];
+    out[q + newIn] = genome[p + oldIn]; // bias
+    p += oldIn + 1;
+    q += newIn + 1;
+  }
+  out.set(genome.subarray(p), q);
+  for (let i = 0; i < out.length; i++) if (!Number.isFinite(out[i])) return null;
+  return out;
+}
+
+/**
+ * @param {{seed?:unknown, rules?:object, spec?:object, hidden?:number[], evo?:object,
+ *   drivers?:{genomes:Float32Array[], sizes:number[], difficulty:number}}} [opts]
+ *   drivers: start from driver nets trained under another rule set instead of random ones.
+ *   Each car gets one of them in turn; nets the rule set adds (strategy) start random.
+ * @returns the trainer, or null if `drivers` was given and does not fit
  */
 export function createTrainer(opts = {}) {
   const rules = opts.rules ?? RULES_FAHREN;
   const evo = { ...EVO_DEFAULTS, ...(opts.evo ?? {}) };
   const seed = normalizeSeed(opts.seed ?? 1);
-  const sizes = [rules.channels.length, ...(opts.hidden ?? [16, 16]), 2];
+  const drivers = opts.drivers;
+  let hidden = opts.hidden ?? [16, 16];
+  if (drivers) {
+    if (!Array.isArray(drivers.genomes) || !drivers.genomes.length || !Array.isArray(drivers.sizes)) return null;
+    if (!(drivers.difficulty >= 0 && drivers.difficulty <= 1)) return null;
+    hidden = drivers.sizes.slice(1, -1);
+  }
+  const sizes = [rules.channels.length, ...hidden, 2];
   const rng = createRng(hashSeed(3, seed));
   const genomes = [];
-  for (let i = 0; i < evo.popSize; i++) genomes.push(randomGenome(sizes, rng));
+  for (let i = 0; i < evo.popSize; i++) {
+    let driver;
+    if (drivers) {
+      driver = expandDriver(drivers.genomes[i % drivers.genomes.length], drivers.sizes, sizes);
+      if (!driver) return null;
+    } else {
+      driver = randomGenome(sizes, rng);
+    }
+    if (rules.strategy) {
+      const genome = new Float32Array(genomeLengthFor(rules, sizes));
+      genome.set(driver);
+      genome.set(randomGenome(rules.strategy.sizes, rng), driver.length);
+      genomes.push(genome);
+    } else {
+      genomes.push(driver);
+    }
+  }
   const trainer = {
     seed, rules, spec: opts.spec ?? CAR, sizes, evo, rng,
     gen: 0, // generations completed
-    difficulty: 0,
+    difficulty: drivers ? drivers.difficulty : 0,
     raceSeconds: 0, // driving time of the running generation
     trackIndex: 0,
     world: null,
@@ -124,6 +181,11 @@ function finishTrack(trainer) {
     const car = cars[i];
     if (car.progress > 0) trainer.distance[i] += car.progress;
     if (trainer.rules.clean(car, trainer.world.track)) trainer.cleanRuns[i]++;
+    if (trainer.stops) {
+      trainer.stops[i] += car.stops;
+      trainer.laps[i] += car.laps;
+      if (car.endReason !== 'zeit') trainer.retired[i]++;
+    }
   }
   trainer.trackIndex++;
 }
@@ -153,6 +215,11 @@ function finishGeneration(trainer) {
     clean: trainer.cleanRuns[best], // clean runs of this generation's best car
     eliteClean: hasElite ? trainer.cleanRuns[0] : null, // clean runs of the previous champion
   };
+  if (trainer.stops) {
+    stats.stops = trainer.stops[best] / tracks; // pit stops per race of the best car
+    stats.laps = trainer.laps[best] / tracks;
+    stats.retired = trainer.retired[best]; // races it did not finish
+  }
   trainer.history.push(stats);
   trainer.champion = Float32Array.from(trainer.genomes[best]);
 
@@ -288,7 +355,7 @@ export function restoreTrainer(data) {
     if (!Array.isArray(data.history) || !Array.isArray(data.tests)) return null;
     if (!Array.isArray(data.genomes) || data.genomes.length !== evo.popSize || evo.popSize < 1) return null;
 
-    const length = genomeLength(sizes);
+    const length = genomeLengthFor(rules, sizes);
     const genomes = [];
     for (const text of data.genomes) {
       const genome = decode(text, length);
