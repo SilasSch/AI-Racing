@@ -45,7 +45,7 @@ Gelernte Strategie mindestens so gut wie "so spät wie möglich": bei 3 von 6 St
 - **Eine gute Strategie wird nicht gelernt.** Ein Tank reicht etwa drei Runden, die Netze stoppen
   trotzdem fast jede Runde (Stints von rund 62 Sekunden, 4 bis 6 Stopps in 8 Minuten).
   Die Handregel „so spät wie möglich tanken“ kommt mit demselben Fahrer bei drei Startwerten
-  10 bis 16 % weiter. Bei den anderen drei liegt die gelernte Strategie 1 bis 4 % vorn.
+  11 bis 19 % weiter. Bei den anderen drei liegt die gelernte Strategie 1 bis 4 % vorn.
   Gegen „jede Runde an die Box“ liegt sie bei 5 von 6 knapp vorn, also praktisch gleichauf.
 - **Warum?** Jede Runde zu stoppen ist sicher und für ein Zufallsnetz leicht zu treffen: eine Ausgabe
   muss nur dauerhaft positiv sein. Seltener zu stoppen verlangt, dass die Entscheidung vom Tankstand
