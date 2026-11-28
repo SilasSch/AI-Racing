@@ -301,6 +301,7 @@ async function waitGen(page, min, ms) {
     await check('Ausdauer von null: Rennen laufen, Anzeigen und 16x sind da', async () => {
       await p2.click('#btn-from-zero');
       await p2.waitForSelector('#start-choice', { state: 'hidden' });
+      if (/Phase/.test(await p2.textContent('#mode-note'))) throw new Error('Start von null zeigt eine Einfrierphase');
       for (const id of ['#gauges', '#g-fuel', '#g-tyres', '#g-damage', '#radio', '#speed-16', '#stat-stops']) {
         if (!(await visible(p2, id))) throw new Error(`${id} nicht sichtbar`);
       }
@@ -347,9 +348,13 @@ async function waitGen(page, min, ms) {
       await p2.click('#btn-reset');
       await p2.waitForSelector('#start-choice', { state: 'visible' });
       if (await p2.isDisabled('#btn-from-drivers')) throw new Error('Fahrer-Knopf bleibt aus');
+      const offer = await p2.textContent('#drivers-why');
+      if (!/besten Testergebnis|bestes Auto/.test(offer) || !/40 Generationen/.test(offer)) throw new Error(`Angebot erklärt die Startweise nicht: ${offer}`);
       await p2.click('#btn-from-drivers');
       await p2.waitForSelector('#start-choice', { state: 'hidden' });
       if ((await gen(p2)) !== 0) throw new Error('nicht bei Generation 0');
+      const phase = await p2.textContent('#mode-note');
+      if (!/Phase 1 von 2/.test(phase) || !/eingefroren/.test(phase)) throw new Error(`Phase wird nicht angezeigt: ${phase}`);
       const level = Number((await p2.textContent('#stat-diff')).trim());
       if (!(level >= 1)) throw new Error(`Schwierigkeit nicht übernommen: ${level}`);
       await p2.click('#speed-max');

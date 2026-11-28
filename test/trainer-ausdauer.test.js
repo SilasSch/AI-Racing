@@ -142,3 +142,46 @@ test('Start aus trainierten Fahrern: die Population fährt sofort', () => {
   const cold = runGeneration(scratch);
   assert.ok(s.best > cold.best, `${s.best} vs ${cold.best}`);
 });
+
+test('freezeDriverGens: erst lernt nur der Boxenfunk, danach auch der Fahrer', () => {
+  const driver = new Float32Array(514);
+  for (let i = 0; i < driver.length; i++) driver[i] = Math.sin(i) * 0.3;
+  const t = small(3, { drivers: { genomes: [driver], sizes: [12, 16, 16, 2], difficulty: 0 }, freezeDriverGens: 2 });
+  assert.equal(t.freezeGens, 2);
+  const split = genomeLength(t.sizes);
+  const head = (g) => bytes(g.subarray(0, split));
+  const original = head(t.genomes[0]);
+  for (const g of t.genomes) assert.deepEqual(head(g), original);
+  runGeneration(t); // breeds generation 2: still frozen
+  for (const g of t.genomes) assert.deepEqual(head(g), original, 'Fahrer in Generation 2 verändert');
+  const tails = new Set(t.genomes.map((g) => bytes(g.subarray(split)).join()));
+  assert.ok(tails.size > 4, 'die Strategie-Netze unterscheiden sich');
+  runGeneration(t); // breeds generation 3: the driver may change now
+  assert.ok(t.genomes.some((g) => head(g).join() !== original.join()), 'Fahrer nach der Einfrierphase unverändert');
+});
+
+test('ohne freezeDriverGens ändert sich der Fahrer von Anfang an', () => {
+  const driver = new Float32Array(514).fill(0.1);
+  const t = small(3, { drivers: { genomes: [driver], sizes: [12, 16, 16, 2], difficulty: 0 } });
+  assert.equal(t.freezeGens, 0);
+  const split = genomeLength(t.sizes);
+  const original = bytes(t.genomes[0].subarray(0, split)).join();
+  runGeneration(t);
+  assert.ok(t.genomes.some((g) => bytes(g.subarray(0, split)).join() !== original));
+});
+
+test('freezeGens übersteht Speichern und Laden; alte Stände ohne das Feld laden mit 0', () => {
+  const driver = new Float32Array(514).fill(0.1);
+  const t = small(3, { drivers: { genomes: [driver], sizes: [12, 16, 16, 2], difficulty: 0 }, freezeDriverGens: 7 });
+  const saved = JSON.parse(JSON.stringify(serialize(t)));
+  assert.equal(restoreTrainer(saved).freezeGens, 7);
+  delete saved.freezeGens;
+  assert.equal(restoreTrainer(saved).freezeGens, 0);
+  assert.equal(restoreTrainer({ ...saved, freezeGens: -1 }), null);
+  assert.equal(restoreTrainer({ ...saved, freezeGens: 'x' }), null);
+});
+
+test('freezeDriverGens ohne Strategie-Netz hat keine Wirkung', () => {
+  const t = createTrainer({ seed: 1, evo: { popSize: 8 }, freezeDriverGens: 5 });
+  assert.equal(t.freezeGens, 0);
+});

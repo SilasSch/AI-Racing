@@ -1,5 +1,5 @@
 // Page wiring: the two modes, controls, frame loop, statistics, saving.
-import { createTrainer, advance, serialize, restoreTrainer } from '../core/trainer.js';
+import { createTrainer, advance, serialize, restoreTrainer, FREEZE_DRIVER_GENS } from '../core/trainer.js';
 import { DT, RULES_FAHREN, RULES_AUSDAUER } from '../core/rules.js';
 import { normalizeSeed } from '../core/rng.js';
 import { saveState, loadState, clearState } from './storage.js';
@@ -119,8 +119,30 @@ function syncInputs() {
   $('mut-sigma-value').textContent = evo.sigma.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/** The line beside the mode switch: what this mode is, or which phase of learning runs. */
+function modeNote() {
+  if (mode === 'ausdauer' && trainer && trainer.freezeGens > 0) {
+    return trainer.gen < trainer.freezeGens
+      ? `Phase 1 von 2: Nur der Boxenfunk lernt. Der Fahrer ist bis Generation ${trainer.freezeGens} eingefroren, alle Autos fahren gleich.`
+      : 'Phase 2 von 2: Fahrer und Boxenfunk lernen gemeinsam.';
+  }
+  return MODES[mode].note;
+}
+
+/** The driver that endurance starts from: the car with the best test result in "fahren". */
+function bestDriver() {
+  const source = trainers.fahren;
+  const genome = source.proven?.genome ?? source.champion;
+  if (!genome) return null;
+  const which = source.proven
+    ? `das Auto mit dem besten Testergebnis aus „Fahren lernen“ (Generation ${source.proven.gen}, ${source.proven.passed} von 20)`
+    : `das beste Auto aus Generation ${source.gen} von „Fahren lernen“`;
+  return { genome, which, sizes: source.sizes, difficulty: source.difficulty };
+}
+
 function onGeneration() {
   updateStats();
+  $('mode-note').textContent = modeNote();
   chart.update(trainer.history, trainer.tests, { endurance: mode === 'ausdauer' });
   if (performance.now() - lastSave > SAVE_EVERY_MS) save();
 }
@@ -208,7 +230,7 @@ function pickSeed() {
 function refresh() {
   const endurance = mode === 'ausdauer';
   for (const name of Object.keys(MODES)) $(`mode-${name}`).setAttribute('aria-pressed', String(name === mode));
-  $('mode-note').textContent = MODES[mode].note;
+  $('mode-note').textContent = modeNote();
   $('start-choice').hidden = !(endurance && !trainer);
   $('speed-16').hidden = !endurance;
   if (!endurance && speed === '16') setSpeed('4');
@@ -218,12 +240,12 @@ function refresh() {
   $('explain-ausdauer').hidden = !endurance;
   $('explain-fahren').hidden = endurance;
   if (endurance && !trainer) {
-    const drivers = trainers.fahren;
-    const enough = drivers.gen >= MIN_DRIVER_GENS;
+    const best = bestDriver();
+    const enough = trainers.fahren.gen >= MIN_DRIVER_GENS && best !== null;
     $('btn-from-drivers').disabled = !enough;
     $('drivers-why').textContent = enough
-      ? `Übernimmt die 60 Fahrer aus Generation ${drivers.gen} von „Fahren lernen“. Sie können schon fahren und müssen nur die Box lernen.`
-      : `Dafür braucht „Fahren lernen“ mindestens ${MIN_DRIVER_GENS} Generationen. Bisher sind es ${drivers.gen}.`;
+      ? `Alle 60 Autos bekommen ${best.which} als Fahrer. ${FREEZE_DRIVER_GENS} Generationen lang lernt nur der Boxenfunk, danach beide.`
+      : `Dafür braucht „Fahren lernen“ mindestens ${MIN_DRIVER_GENS} Generationen. Bisher sind es ${trainers.fahren.gen}.`;
   }
   syncInputs();
   updateStats();
@@ -254,9 +276,14 @@ function startEndurance(fromDrivers) {
   seedTyped = false;
   let next = null;
   if (fromDrivers) {
-    const drivers = trainers.fahren;
-    next = createTrainer({ seed, rules: RULES_AUSDAUER, drivers: { genomes: drivers.genomes, sizes: drivers.sizes, difficulty: drivers.difficulty } });
-    $('start-note').hidden = next !== null; // tell the user if the drivers did not fit
+    // One proven driver for every car and a frozen phase: then the cars differ only in
+    // strategy, and the strategy net gets a clean signal (measured in docs/stufe-2-nachweis.md).
+    const best = bestDriver();
+    next = best && createTrainer({
+      seed, rules: RULES_AUSDAUER, freezeDriverGens: FREEZE_DRIVER_GENS,
+      drivers: { genomes: [best.genome], sizes: best.sizes, difficulty: best.difficulty },
+    });
+    $('start-note').hidden = Boolean(next); // tell the user if the driver did not fit
   } else {
     $('start-note').hidden = true;
   }

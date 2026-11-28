@@ -92,3 +92,25 @@ test('Fitness NaN zählt als -Infinity', () => {
   assert.ok(same(next[0], pop[9]));
   assert.ok(!next.some((g) => same(g, pop[0])), 'NaN-Genom darf nie gewinnen');
 });
+
+test('from: Gewichte vor dieser Stelle bleiben die der Mutter, dahinter wird gemischt und mutiert', () => {
+  const pop = Array.from({ length: 60 }, (_, i) => { const g = new Float32Array(40); g.fill(i, 0, 25); g.fill(100 + i, 25); return g; });
+  const next = nextGeneration(pop, pop.map((_, i) => i), { ...EVO_DEFAULTS, crossover: 1, rate: 0.5, sigma: 0.2, from: 25 }, createRng(11));
+  let changedTail = 0;
+  for (const child of next.slice(4)) {
+    const head = new Set(child.subarray(0, 25));
+    assert.equal(head.size, 1, 'der vordere Teil stammt unverändert von genau einem Elternteil');
+    const parent = [...head][0];
+    assert.ok(Number.isInteger(parent) && parent >= 0 && parent < 60);
+    if (child.subarray(25).some((v) => !Number.isInteger(v))) changedTail++;
+  }
+  assert.ok(changedTail > 50, `hinterer Teil mutiert: ${changedTail}`);
+});
+
+test('from 0 oder fehlend verhält sich wie bisher', () => {
+  const pop = population();
+  const f = pop.map((_, i) => i % 7);
+  const a = nextGeneration(pop, f, EVO_DEFAULTS, createRng(9));
+  const b = nextGeneration(pop, f, { ...EVO_DEFAULTS, from: 0 }, createRng(9));
+  a.forEach((g, i) => assert.ok(same(g, b[i])));
+});

@@ -1,4 +1,4 @@
-// Stage 2 proof. For each seed: 60 generations of "fahren", then endurance from those drivers.
+// Stage 2 proof. For each seed: 60 generations of "fahren", then endurance from its best driver.
 // Every 5th generation the best car drives one fresh race on a control track. It passes when
 //   (a) it is still running at the end (an empty tank ends a race at once, so this also
 //       means the tank never ran dry),  (b) it made at least one pit stop, and
@@ -9,7 +9,7 @@
 import { fork } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
-import { createTrainer, runGeneration, validationTracks } from '../src/core/trainer.js';
+import { createTrainer, runGeneration, validationTracks, FREEZE_DRIVER_GENS } from '../src/core/trainer.js';
 import { RULES_AUSDAUER } from '../src/core/rules.js';
 import { createWorld, stepWorld } from '../src/core/world.js';
 
@@ -62,11 +62,19 @@ if (process.send) {
     const t0 = Date.now();
     const fahren = createTrainer({ seed });
     while (fahren.gen < FAHREN_GENS) runGeneration(fahren);
-    const trainer = createTrainer({ seed, rules: RULES_AUSDAUER, drivers: { genomes: fahren.genomes, sizes: fahren.sizes, difficulty: fahren.difficulty } });
+    // Start as the page does: every car gets the driver with the best test result,
+    // and for the first generations only the strategy net evolves.
+    const best = fahren.proven?.genome ?? fahren.champion;
+    const trainer = createTrainer({
+      seed, rules: RULES_AUSDAUER, freezeDriverGens: FREEZE_DRIVER_GENS,
+      drivers: { genomes: [best], sizes: fahren.sizes, difficulty: fahren.difficulty },
+    });
+    let stopsAtUnfreeze = null;
     let passedAt = null, passing = null, early = null;
     const reasons = {};
     while (trainer.gen < gens) {
       runGeneration(trainer);
+      if (trainer.gen === FREEZE_DRIVER_GENS) stopsAtUnfreeze = trainer.history.at(-1).stops;
       if (trainer.gen % 5 !== 0) continue;
       const car = raceOnce(trainer.champion, trainer, CHECK_TRACK, CHECK_SECONDS);
       if (trainer.gen === 5) early = { distance: car.progress, stops: car.stops, reason: car.endReason };
@@ -85,7 +93,7 @@ if (process.send) {
     process.send({
       seed, passedAt, early, reasons, compare,
       passing: passing && { distance: passing.distance, stops: passing.stops, stints: passing.stints },
-      lastStops: last.stops, lastKmh: last.best * 3.6, difficulty: trainer.difficulty,
+      lastStops: last.stops, stopsAtUnfreeze, lastKmh: last.best * 3.6, difficulty: trainer.difficulty,
       seconds: (Date.now() - t0) / 1000,
     });
     process.exit(0);
@@ -111,6 +119,7 @@ if (process.send) {
   results.sort((a, b) => a.seed - b.seed);
   const m = (v) => `${Math.round(v)} m`;
   console.log(`Nachweis Ausdauer: bis zu ${gens} Generationen, aufbauend auf ${FAHREN_GENS} Generationen "Fahren lernen"`);
+  console.log(`Start wie auf der Seite: alle Autos mit dem besten Fahrer, ${FREEZE_DRIVER_GENS} Generationen lang lernt nur der Boxenfunk.`);
   console.log(`Prüfrennen: Kontrollstrecke ${CHECK_TRACK}, ${CHECK_SECONDS} s. Bestanden heißt: Rennen beendet (also nie mit leerem Tank), mindestens ein Stopp, und ohne Box wäre der Tank leer.\n`);
   console.log('Seed | bestanden in Gen. | Stopps | Stints (s)        | Distanz  | Gen. 5: Distanz, Ende | Rechenzeit');
   console.log('-----|-------------------|--------|-------------------|----------|-----------------------|-----------');
@@ -128,13 +137,13 @@ if (process.send) {
   }
   console.log(`\nIst die gelernte Strategie gut? Mittlere Distanz des letzten besten Autos auf ${COMPARE_TRACKS.length} Kontrollstrecken, ${CHECK_SECONDS} s,`);
   console.log('gegen feste Vergleichsstrategien mit demselben Fahrer und demselben Tempo:\n');
-  console.log('Seed | gelernt  | jede Runde Box | so spät wie möglich | nie Box  | Stopps je Rennen (Training)');
-  console.log('-----|----------|----------------|---------------------|----------|----------------------------');
+  console.log(`Seed | gelernt  | jede Runde Box | so spät wie möglich | nie Box  | Stopps je Rennen: Gen. ${FREEZE_DRIVER_GENS} / am Ende`);
+  console.log('-----|----------|----------------|---------------------|----------|--------------------------------');
   let wins = 0;
   for (const r of results) {
     const c = r.compare;
     if (c.learned >= c.late) wins++;
-    console.log(`${String(r.seed).padStart(4)} | ${m(c.learned).padEnd(8)} | ${m(c.everyLap).padEnd(14)} | ${m(c.late).padEnd(19)} | ${m(c.never).padEnd(8)} | ${r.lastStops.toFixed(1)}`);
+    console.log(`${String(r.seed).padStart(4)} | ${m(c.learned).padEnd(8)} | ${m(c.everyLap).padEnd(14)} | ${m(c.late).padEnd(19)} | ${m(c.never).padEnd(8)} | ${r.stopsAtUnfreeze === null ? '-' : r.stopsAtUnfreeze.toFixed(1)} / ${r.lastStops.toFixed(1)}`);
   }
   const passed = results.filter((r) => r.passedAt !== null).length;
   const needed = Math.ceil((seeds * 2) / 3);

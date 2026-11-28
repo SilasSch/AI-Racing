@@ -11,6 +11,9 @@ import { EVO_DEFAULTS, nextGeneration } from './evolution.js';
 export const TRACKS_PER_GEN = 3;
 export const TEST_EVERY = 5;
 export const TEST_COUNT = 20;
+// Recommended length of the frozen-driver phase when endurance starts from a trained driver.
+// Measured in docs/stufe-2-nachweis.md: without it the strategy net learns to pit every lap.
+export const FREEZE_DRIVER_GENS = 40;
 export const DIFFICULTY_STEP = 0.1;
 export const CLEAN_NEEDED = 2; // of TRACKS_PER_GEN: the majority
 const VERSION = 1;
@@ -119,9 +122,11 @@ export function expandDriver(genome, fromSizes, toSizes) {
 
 /**
  * @param {{seed?:unknown, rules?:object, spec?:object, hidden?:number[], evo?:object,
- *   drivers?:{genomes:Float32Array[], sizes:number[], difficulty:number}}} [opts]
+ *   drivers?:{genomes:Float32Array[], sizes:number[], difficulty:number}, freezeDriverGens?:number}} [opts]
  *   drivers: start from driver nets trained under another rule set instead of random ones.
  *   Each car gets one of them in turn; nets the rule set adds (strategy) start random.
+ *   freezeDriverGens: for this many generations only the strategy net evolves. A trained
+ *   driver then gives every car the same driving, so differences come from strategy alone.
  * @returns the trainer, or null if `drivers` was given and does not fit
  */
 export function createTrainer(opts = {}) {
@@ -159,6 +164,8 @@ export function createTrainer(opts = {}) {
     seed, rules, spec: opts.spec ?? CAR, sizes, evo, rng,
     gen: 0, // generations completed
     difficulty: drivers ? drivers.difficulty : 0,
+    // Generations in which the driver net stays as it is and only the strategy net evolves.
+    freezeGens: rules.strategy && Number.isInteger(opts.freezeDriverGens) && opts.freezeDriverGens > 0 ? opts.freezeDriverGens : 0,
     raceSeconds: 0, // driving time of the running generation
     trackIndex: 0,
     world: null,
@@ -235,7 +242,9 @@ function finishGeneration(trainer) {
       trainer.proven = { genome: Float32Array.from(trainer.champion), passed: result.passed, gen: trainer.gen };
     }
   }
-  trainer.genomes = nextGeneration(trainer.genomes, fitness, trainer.evo, trainer.rng);
+  // While the driver is frozen, only the strategy net behind it is mixed and mutated.
+  const params = trainer.gen < trainer.freezeGens ? { ...trainer.evo, from: genomeLength(trainer.sizes) } : trainer.evo;
+  trainer.genomes = nextGeneration(trainer.genomes, fitness, params, trainer.rng);
   resetAccumulators(trainer);
   return stats;
 }
@@ -325,6 +334,7 @@ export function serialize(trainer) {
     rngState: trainer.rng.state,
     gen: trainer.gen,
     difficulty: trainer.difficulty,
+    freezeGens: trainer.freezeGens,
     genomes: trainer.genomes.map(encode),
     champion: trainer.champion ? encode(trainer.champion) : null,
     history: trainer.history.map((h) => ({ ...h })),
@@ -352,6 +362,8 @@ export function restoreTrainer(data) {
     for (const key of Object.keys(CAR)) if (!isNumber(spec[key])) return null;
     if (!isCount(data.seed) || !isCount(data.gen) || !isCount(data.rngState)) return null;
     if (!isNumber(data.difficulty) || data.difficulty < 0 || data.difficulty > 1) return null;
+    const freezeGens = data.freezeGens ?? 0; // states saved before this field existed
+    if (!isCount(freezeGens)) return null;
     if (!Array.isArray(data.history) || !Array.isArray(data.tests)) return null;
     if (!Array.isArray(data.genomes) || data.genomes.length !== evo.popSize || evo.popSize < 1) return null;
 
@@ -379,6 +391,7 @@ export function restoreTrainer(data) {
       seed: data.seed, rules, spec: { ...spec }, sizes: [...sizes], evo: { ...evo }, rng,
       gen: data.gen,
       difficulty: data.difficulty,
+      freezeGens: rules.strategy ? freezeGens : 0,
       raceSeconds: 0,
       trackIndex: 0,
       world: null,
