@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import {
   createTrainer, advance, runGeneration, runTest, testTracks, trainingTrackSeed, testTrackSeed,
   validationTracks, validationTrackSeed,
-  serialize, restoreTrainer, TRACKS_PER_GEN, TEST_EVERY,
+  serialize, restoreTrainer, TRACKS_PER_GEN, TEST_EVERY, ruleSet,
 } from '../src/core/trainer.js';
+import { RULES_FAHREN } from '../src/core/rules.js';
 import { validateTrack } from '../src/core/track.js';
 
 const small = (seed = 1) => createTrainer({ seed, evo: { popSize: 12 } });
@@ -253,4 +254,42 @@ test('runTest fährt auf Wunsch einen anderen Streckensatz', () => {
   const r = runTest(t.genomes[0], t, few);
   assert.equal(r.perTrack.length, 7);
   assert.equal(runTest(t.genomes[0], t).perTrack.length, 20);
+});
+
+test('Regelsatz fahren trägt Kriterium und Fahrzeit', () => {
+  assert.equal(RULES_FAHREN.tracksPerGen, 3);
+  assert.deepEqual(RULES_FAHREN.raceSeconds, [45, 45]);
+  assert.equal(RULES_FAHREN.endurance, null);
+  assert.equal(RULES_FAHREN.strategy, null);
+  const track = { length: 1200 };
+  assert.equal(RULES_FAHREN.clean({ endReason: 'zeit', progress: 600 }, track), true);
+  assert.equal(RULES_FAHREN.clean({ endReason: 'zeit', progress: 599 }, track), false);
+  assert.equal(RULES_FAHREN.clean({ endReason: 'wand', progress: 900 }, track), false);
+});
+
+test('Fahrzeit der Generation steht im Trainer und in der Statistik', () => {
+  const t = small();
+  assert.equal(t.raceSeconds, 45);
+  const s = runGeneration(t);
+  assert.equal(s.seconds, 45);
+  assert.equal(t.raceSeconds, 45);
+});
+
+test('alter gespeicherter Stand ohne neue Felder lädt und läuft identisch weiter', () => {
+  const a = small(), b = small();
+  for (let i = 0; i < 4; i++) runGeneration(a);
+  runGeneration(b); runGeneration(b);
+  const old = JSON.parse(JSON.stringify(serialize(b)));
+  for (const h of old.history) delete h.seconds; // as saved before stage 2
+  const restored = restoreTrainer(old);
+  assert.ok(restored);
+  runGeneration(restored); runGeneration(restored);
+  assert.deepEqual(restored.history.slice(2), a.history.slice(2));
+  assert.deepEqual(bytes(restored.champion), bytes(a.champion));
+});
+
+test('ruleSet kennt fahren, unbekannte id ergibt undefined', () => {
+  assert.equal(ruleSet('fahren'), RULES_FAHREN);
+  assert.equal(ruleSet('gibt-es-nicht'), undefined);
+  assert.equal(ruleSet('toString'), undefined);
 });

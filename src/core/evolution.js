@@ -15,7 +15,8 @@ function pick(score, size, rng) {
 /**
  * @param {Float32Array[]} genomes current population (not modified)
  * @param {number[]} fitness one value per genome; NaN counts as -Infinity
- * @param {{elites:number,tournament:number,crossover:number,rate:number,sigma:number}} params
+ * @param {{elites:number,tournament:number,crossover:number,rate:number,sigma:number,from?:number}} params
+ *   from: weights before this index are neither mixed nor mutated (a frozen part of the genome)
  * @param {{next():number,int(n:number):number,normal():number}} rng
  * @returns {Float32Array[]} next population of the same size, elites first
  */
@@ -24,6 +25,7 @@ export function nextGeneration(genomes, fitness, params, rng) {
   const score = fitness.map((f) => (Number.isNaN(f) ? -Infinity : f));
   const order = score.map((_, i) => i).sort((a, b) => score[b] - score[a] || a - b);
   const next = [];
+  const from = params.from ?? 0; // weights before this index are frozen: copied from the mother
   const elites = Math.min(params.elites, count);
   for (let e = 0; e < elites; e++) next.push(Float32Array.from(genomes[order[e]]));
 
@@ -32,10 +34,10 @@ export function nextGeneration(genomes, fitness, params, rng) {
     const child = Float32Array.from(mother);
     if (rng.next() < params.crossover) {
       const father = genomes[pick(score, params.tournament, rng)];
-      for (let i = 0; i < child.length; i++) if (rng.next() < 0.5) child[i] = father[i];
+      for (let i = from; i < child.length; i++) if (rng.next() < 0.5) child[i] = father[i];
     }
     if (params.rate > 0) {
-      for (let i = 0; i < child.length; i++) {
+      for (let i = from; i < child.length; i++) {
         if (rng.next() < params.rate) child[i] += rng.normal() * params.sigma;
       }
     }

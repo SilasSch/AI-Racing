@@ -4,18 +4,32 @@ import { createRng, hashSeed, normalizeSeed } from './rng.js';
 import { genomeLength, randomGenome } from './net.js';
 import { generateTrack } from './generator.js';
 import { CAR } from './car.js';
-import { RULES_FAHREN } from './rules.js';
-import { createWorld, stepWorld, runToEnd } from './world.js';
+import { RULES_FAHREN, RULES_AUSDAUER, defaultSeconds } from './rules.js';
+import { createWorld, stepWorld, runToEnd, genomeLengthFor } from './world.js';
 import { EVO_DEFAULTS, nextGeneration } from './evolution.js';
 
 export const TRACKS_PER_GEN = 3;
 export const TEST_EVERY = 5;
 export const TEST_COUNT = 20;
-export const CLEAN_DISTANCE = 600; // metres a clean run must cover
+// Recommended length of the frozen-driver phase when endurance starts from a trained driver.
+// Measured in docs/stufe-2-nachweis.md: without it the strategy net learns to pit every lap.
+export const FREEZE_DRIVER_GENS = 40;
 export const DIFFICULTY_STEP = 0.1;
 export const CLEAN_NEEDED = 2; // of TRACKS_PER_GEN: the majority
 const VERSION = 1;
-const RULE_SETS = { [RULES_FAHREN.id]: RULES_FAHREN };
+const RULE_SETS = { [RULES_FAHREN.id]: RULES_FAHREN, [RULES_AUSDAUER.id]: RULES_AUSDAUER };
+
+/** The rule set with this id, or undefined. Saved states name their rule set by id. */
+export function ruleSet(id) {
+  return Object.hasOwn(RULE_SETS, id) ? RULE_SETS[id] : undefined;
+}
+
+/** Driving time of generation `gen`: fixed, or drawn from the rule set's range. */
+function pickSeconds(rules, seed, gen) {
+  const [min, max] = rules.raceSeconds;
+  if (min === max) return min;
+  return createRng(hashSeed(5, seed, gen)).range(min, max);
+}
 
 /** Training track seeds never have the top bit set ... */
 export function trainingTrackSeed(seed, gen, k) {
@@ -66,30 +80,93 @@ export function validationTracks() {
 function startTrack(trainer) {
   const seed = trainingTrackSeed(trainer.seed, trainer.gen, trainer.trackIndex);
   const track = generateTrack(seed, trainer.difficulty);
-  trainer.world = createWorld(track, trainer.rules, trainer.spec, trainer.sizes, trainer.genomes);
+  trainer.raceSeconds = pickSeconds(trainer.rules, trainer.seed, trainer.gen);
+  trainer.world = createWorld(track, trainer.rules, trainer.spec, trainer.sizes, trainer.genomes, { seconds: trainer.raceSeconds });
 }
 
 function resetAccumulators(trainer) {
+  const count = trainer.genomes.length;
   trainer.trackIndex = 0;
-  trainer.distance = new Float64Array(trainer.genomes.length);
-  trainer.cleanRuns = new Uint8Array(trainer.genomes.length);
+  trainer.distance = new Float64Array(count);
+  trainer.cleanRuns = new Uint8Array(count);
+  if (trainer.rules.endurance) {
+    trainer.stops = new Float64Array(count);
+    trainer.laps = new Float64Array(count);
+    trainer.retired = new Uint8Array(count);
+  }
 }
 
 /**
- * @param {{seed?:unknown, rules?:object, spec?:object, hidden?:number[], evo?:object}} [opts]
+ * A driver net with more inputs: the weights of the inputs it already had stay,
+ * the new inputs start at weight zero, so it drives exactly as before.
+ * @returns {Float32Array|null} null if the nets do not fit together
+ */
+export function expandDriver(genome, fromSizes, toSizes) {
+  if (!genome || !Array.isArray(fromSizes) || !Array.isArray(toSizes)) return null;
+  if (fromSizes.length !== toSizes.length || toSizes[0] < fromSizes[0]) return null;
+  for (let l = 1; l < fromSizes.length; l++) if (fromSizes[l] !== toSizes[l]) return null;
+  if (genome.length !== genomeLength(fromSizes)) return null;
+  const out = new Float32Array(genomeLength(toSizes));
+  const oldIn = fromSizes[0], newIn = toSizes[0], hidden = fromSizes[1];
+  let p = 0, q = 0;
+  for (let j = 0; j < hidden; j++) {
+    for (let i = 0; i < oldIn; i++) out[q + i] = genome[p + i];
+    out[q + newIn] = genome[p + oldIn]; // bias
+    p += oldIn + 1;
+    q += newIn + 1;
+  }
+  out.set(genome.subarray(p), q);
+  for (let i = 0; i < out.length; i++) if (!Number.isFinite(out[i])) return null;
+  return out;
+}
+
+/**
+ * @param {{seed?:unknown, rules?:object, spec?:object, hidden?:number[], evo?:object,
+ *   drivers?:{genomes:Float32Array[], sizes:number[], difficulty:number}, freezeDriverGens?:number}} [opts]
+ *   drivers: start from driver nets trained under another rule set instead of random ones.
+ *   Each car gets one of them in turn; nets the rule set adds (strategy) start random.
+ *   freezeDriverGens: for this many generations only the strategy net evolves. A trained
+ *   driver then gives every car the same driving, so differences come from strategy alone.
+ * @returns the trainer, or null if `drivers` was given and does not fit
  */
 export function createTrainer(opts = {}) {
   const rules = opts.rules ?? RULES_FAHREN;
   const evo = { ...EVO_DEFAULTS, ...(opts.evo ?? {}) };
   const seed = normalizeSeed(opts.seed ?? 1);
-  const sizes = [rules.channels.length, ...(opts.hidden ?? [16, 16]), 2];
+  const drivers = opts.drivers;
+  let hidden = opts.hidden ?? [16, 16];
+  if (drivers) {
+    if (!Array.isArray(drivers.genomes) || !drivers.genomes.length || !Array.isArray(drivers.sizes)) return null;
+    if (!(drivers.difficulty >= 0 && drivers.difficulty <= 1)) return null;
+    hidden = drivers.sizes.slice(1, -1);
+  }
+  const sizes = [rules.channels.length, ...hidden, 2];
   const rng = createRng(hashSeed(3, seed));
   const genomes = [];
-  for (let i = 0; i < evo.popSize; i++) genomes.push(randomGenome(sizes, rng));
+  for (let i = 0; i < evo.popSize; i++) {
+    let driver;
+    if (drivers) {
+      driver = expandDriver(drivers.genomes[i % drivers.genomes.length], drivers.sizes, sizes);
+      if (!driver) return null;
+    } else {
+      driver = randomGenome(sizes, rng);
+    }
+    if (rules.strategy) {
+      const genome = new Float32Array(genomeLengthFor(rules, sizes));
+      genome.set(driver);
+      genome.set(randomGenome(rules.strategy.sizes, rng), driver.length);
+      genomes.push(genome);
+    } else {
+      genomes.push(driver);
+    }
+  }
   const trainer = {
     seed, rules, spec: opts.spec ?? CAR, sizes, evo, rng,
     gen: 0, // generations completed
-    difficulty: 0,
+    difficulty: drivers ? drivers.difficulty : 0,
+    // Generations in which the driver net stays as it is and only the strategy net evolves.
+    freezeGens: rules.strategy && Number.isInteger(opts.freezeDriverGens) && opts.freezeDriverGens > 0 ? opts.freezeDriverGens : 0,
+    raceSeconds: 0, // driving time of the running generation
     trackIndex: 0,
     world: null,
     genomes,
@@ -110,18 +187,24 @@ function finishTrack(trainer) {
   for (let i = 0; i < cars.length; i++) {
     const car = cars[i];
     if (car.progress > 0) trainer.distance[i] += car.progress;
-    if (car.endReason === 'zeit' && car.progress >= CLEAN_DISTANCE) trainer.cleanRuns[i]++;
+    if (trainer.rules.clean(car, trainer.world.track)) trainer.cleanRuns[i]++;
+    if (trainer.stops) {
+      trainer.stops[i] += car.stops;
+      trainer.laps[i] += car.laps;
+      if (car.endReason !== 'zeit') trainer.retired[i]++;
+    }
   }
   trainer.trackIndex++;
 }
 
 function finishGeneration(trainer) {
   const count = trainer.genomes.length;
-  const seconds = trainer.rules.episodeSeconds;
+  const seconds = trainer.raceSeconds;
+  const tracks = trainer.rules.tracksPerGen;
   const fitness = new Array(count);
   let best = 0, sum = 0;
   for (let i = 0; i < count; i++) {
-    fitness[i] = trainer.distance[i] / TRACKS_PER_GEN;
+    fitness[i] = trainer.distance[i] / tracks;
     sum += fitness[i];
     if (fitness[i] > fitness[best]) best = i;
   }
@@ -135,9 +218,15 @@ function finishGeneration(trainer) {
     best: fitness[best] / seconds, // average speed in m/s
     mean: sum / count / seconds,
     difficulty: trainer.difficulty, // difficulty this generation was driven at
+    seconds, // driving time per track in this generation
     clean: trainer.cleanRuns[best], // clean runs of this generation's best car
     eliteClean: hasElite ? trainer.cleanRuns[0] : null, // clean runs of the previous champion
   };
+  if (trainer.stops) {
+    stats.stops = trainer.stops[best] / tracks; // pit stops per race of the best car
+    stats.laps = trainer.laps[best] / tracks;
+    stats.retired = trainer.retired[best]; // races it did not finish
+  }
   trainer.history.push(stats);
   trainer.champion = Float32Array.from(trainer.genomes[best]);
 
@@ -153,7 +242,9 @@ function finishGeneration(trainer) {
       trainer.proven = { genome: Float32Array.from(trainer.champion), passed: result.passed, gen: trainer.gen };
     }
   }
-  trainer.genomes = nextGeneration(trainer.genomes, fitness, trainer.evo, trainer.rng);
+  // While the driver is frozen, only the strategy net behind it is mixed and mutated.
+  const params = trainer.gen < trainer.freezeGens ? { ...trainer.evo, from: genomeLength(trainer.sizes) } : trainer.evo;
+  trainer.genomes = nextGeneration(trainer.genomes, fitness, params, trainer.rng);
   resetAccumulators(trainer);
   return stats;
 }
@@ -172,7 +263,7 @@ export function advance(trainer, maxSteps) {
     }
     if (trainer.world.done) {
       finishTrack(trainer);
-      const generationDone = trainer.trackIndex >= TRACKS_PER_GEN;
+      const generationDone = trainer.trackIndex >= trainer.rules.tracksPerGen;
       if (generationDone) finishGeneration(trainer);
       startTrack(trainer);
       if (generationDone) return true;
@@ -201,7 +292,7 @@ export function runTest(genome, trainer, tracks = testTracks()) {
     runToEnd(lap);
     const timed = createWorld(track, trainer.rules, trainer.spec, trainer.sizes, [genome]);
     runToEnd(timed);
-    const speed = Math.max(0, timed.cars[0].progress) / trainer.rules.episodeSeconds;
+    const speed = Math.max(0, timed.cars[0].progress) / defaultSeconds(trainer.rules);
     const ok = lap.cars[0].endReason === 'runde';
     if (ok) passed++;
     speedSum += speed;
@@ -243,6 +334,7 @@ export function serialize(trainer) {
     rngState: trainer.rng.state,
     gen: trainer.gen,
     difficulty: trainer.difficulty,
+    freezeGens: trainer.freezeGens,
     genomes: trainer.genomes.map(encode),
     champion: trainer.champion ? encode(trainer.champion) : null,
     history: trainer.history.map((h) => ({ ...h })),
@@ -260,7 +352,7 @@ const isNumber = (v) => typeof v === 'number' && Number.isFinite(v);
 export function restoreTrainer(data) {
   try {
     if (!data || typeof data !== 'object' || data.version !== VERSION) return null;
-    const rules = RULE_SETS[data.rules];
+    const rules = ruleSet(data.rules);
     if (!rules) return null;
     const { sizes, evo, spec } = data;
     if (!Array.isArray(sizes) || sizes.length < 2 || !sizes.every((s) => Number.isInteger(s) && s > 0)) return null;
@@ -270,10 +362,12 @@ export function restoreTrainer(data) {
     for (const key of Object.keys(CAR)) if (!isNumber(spec[key])) return null;
     if (!isCount(data.seed) || !isCount(data.gen) || !isCount(data.rngState)) return null;
     if (!isNumber(data.difficulty) || data.difficulty < 0 || data.difficulty > 1) return null;
+    const freezeGens = data.freezeGens ?? 0; // states saved before this field existed
+    if (!isCount(freezeGens)) return null;
     if (!Array.isArray(data.history) || !Array.isArray(data.tests)) return null;
     if (!Array.isArray(data.genomes) || data.genomes.length !== evo.popSize || evo.popSize < 1) return null;
 
-    const length = genomeLength(sizes);
+    const length = genomeLengthFor(rules, sizes);
     const genomes = [];
     for (const text of data.genomes) {
       const genome = decode(text, length);
@@ -297,6 +391,8 @@ export function restoreTrainer(data) {
       seed: data.seed, rules, spec: { ...spec }, sizes: [...sizes], evo: { ...evo }, rng,
       gen: data.gen,
       difficulty: data.difficulty,
+      freezeGens: rules.strategy ? freezeGens : 0,
+      raceSeconds: 0,
       trackIndex: 0,
       world: null,
       genomes,

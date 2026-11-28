@@ -121,3 +121,16 @@ test('Welt ohne Autos ist sofort fertig', () => {
   stepWorld(w);
   assert.equal(w.done, true);
 });
+
+test('opts.seconds überschreibt die Fahrzeit einer Welt', () => {
+  for (let s = 0.04; s < 0.07; s += 0.001) {
+    const w = createWorld(track, RULES_FAHREN, CAR, sizes, [constantGenome(s, 0.02)], { seconds: 10 });
+    w.cars[0].state.vx = 9;
+    runToEnd(w);
+    if (w.cars[0].endReason === 'wand') continue;
+    assert.equal(w.cars[0].endReason, 'zeit');
+    near(w.cars[0].time, 10, DT);
+    return;
+  }
+  assert.fail('kein Kreisfahrer gefunden');
+});

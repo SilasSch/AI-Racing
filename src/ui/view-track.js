@@ -105,15 +105,27 @@ export function createTrackView(canvas, getTheme) {
       const ratio = canvas.width / Math.max(1, canvas.clientWidth);
       const size = Math.max(3.2 * ratio, 2.4 * view.scale);
       const cars = world.cars;
+      // Cars in the pit stand in a row beside the start line, off the road.
+      const start = world.track.start;
+      const side = world.track.halfWidth + 5;
+      const pitSpot = (i) => {
+        const back = (i % 10) * 3.2;
+        return {
+          x: start.x + Math.sin(start.heading) * side - Math.cos(start.heading) * back,
+          y: start.y - Math.cos(start.heading) * side - Math.sin(start.heading) * back,
+          heading: start.heading,
+        };
+      };
+      const place = (i) => (cars[i].pit ? pitSpot(i) : cars[i].state);
       for (let i = 0; i < cars.length; i++) {
-        if (i !== leader && !cars[i].alive) drawCar(cars[i].state, theme['car-out'], size * 0.8);
+        if (i !== leader && !cars[i].alive && !cars[i].pit) drawCar(cars[i].state, theme['car-out'], size * 0.8);
       }
       for (let i = 0; i < cars.length; i++) {
-        if (i !== leader && cars[i].alive) drawCar(cars[i].state, theme.car, size);
+        if (i !== leader && (cars[i].alive || cars[i].pit)) drawCar(place(i), theme.car, size);
       }
       if (leader >= 0 && cars[leader]) {
-        const car = cars[leader].state;
-        if (opts.rays !== false && world.track.field) {
+        const car = place(leader);
+        if (opts.rays !== false && world.track.field && !cars[leader].pit) {
           ctx.strokeStyle = theme.ray;
           ctx.globalAlpha = 0.55;
           ctx.lineWidth = Math.max(1, ratio);
