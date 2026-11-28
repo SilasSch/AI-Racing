@@ -19,7 +19,7 @@ function niceStep(span, target) {
 }
 
 export function createChart(svg, tip, table) {
-  let history = [], tests = [], geometry = null;
+  let history = [], tests = [], geometry = null, endurance = false;
 
   function render() {
     const width = Math.max(300, svg.parentElement.clientWidth);
@@ -39,7 +39,15 @@ export function createChart(svg, tip, table) {
     const stepA = niceStep(maxSpeed, 4);
     maxSpeed = Math.ceil(maxSpeed / stepA) * stepA;
     const yA = (v) => topA + PANEL.a * (1 - v / maxSpeed);
-    const yB = (v) => topB + PANEL.b * (1 - v / 20);
+    // Panel B shows what is being learned: unknown tracks completed, or in endurance the
+    // pit stops (there a lap without retiring is no feat, so "tracks completed" says nothing).
+    let maxB = 20;
+    if (endurance) {
+      maxB = 4;
+      for (const h of history) if (Number.isFinite(h.stops)) maxB = Math.max(maxB, Math.ceil(h.stops));
+      maxB += maxB % 2; // even, so the middle tick is a whole number
+    }
+    const yB = (v) => topB + PANEL.b * (1 - v / maxB);
     const yC = (v) => topC + PANEL.c * (1 - v);
     geometry = { x, x0, x1, maxGen, topA, bottom: topC + PANEL.c };
 
@@ -54,13 +62,15 @@ export function createChart(svg, tip, table) {
       text(x0 - 8, yA(v) + 4, fmt(v), '', 'end');
     }
     // panel B
-    text(x0, topB - 8, 'Unbekannte Strecken geschafft, von 20', 'title');
-    for (const v of [0, 10, 20]) {
+    text(x0, topB - 8, endurance ? 'Boxenstopps je Rennen, bestes Auto (Ring: mindestens ein Ausfall)' : 'Unbekannte Strecken geschafft, von 20', 'title');
+    for (const v of [0, maxB / 2, maxB]) {
       line(x0, yB(v), x1, yB(v), v === 0 ? 'axis' : 'gridline');
       text(x0 - 8, yB(v) + 4, String(v), '', 'end');
     }
-    line(x0, yB(GOAL), x1, yB(GOAL), 'goal');
-    text(x1 + 8, yB(GOAL) + 4, `Ziel ${GOAL}`);
+    if (!endurance) {
+      line(x0, yB(GOAL), x1, yB(GOAL), 'goal');
+      text(x1 + 8, yB(GOAL) + 4, `Ziel ${GOAL}`);
+    }
     // panel C
     text(x0, topC - 8, 'Schwierigkeit der Trainingsstrecken, von 10', 'title');
     line(x0, yC(0), x1, yC(0), 'axis');
@@ -92,9 +102,17 @@ export function createChart(svg, tip, table) {
       const train = history.map((h) => [x(h.gen), yA(h.best * KMH)]);
       out.push(`<path d="${path(train)}" class="s1"/>`);
       const testA = tests.map((t) => [x(t.gen), yA(t.meanSpeed * KMH)]);
-      const testB = tests.map((t) => [x(t.gen), yB(t.passed)]);
+      const testB = endurance ? [] : tests.map((t) => [x(t.gen), yB(t.passed)]);
+      if (endurance) {
+        const withStops = history.filter((h) => Number.isFinite(h.stops));
+        out.push(`<path d="${path(withStops.map((h) => [x(h.gen), yB(Math.min(maxB, h.stops))]))}" class="s1 stops"/>`);
+        for (const h of withStops) {
+          if (h.retired > 0) out.push(`<circle cx="${x(h.gen).toFixed(1)}" cy="${yB(Math.min(maxB, h.stops)).toFixed(1)}" r="4" class="retired"/>`);
+        }
+      }
       if (tests.length) {
-        out.push(`<path d="${path(testA)}" class="s2"/>`, `<path d="${path(testB)}" class="s2"/>`);
+        out.push(`<path d="${path(testA)}" class="s2"/>`);
+        if (testB.length) out.push(`<path d="${path(testB)}" class="s2"/>`);
         const r = tests.length > 40 ? 2.5 : 4;
         for (const [px, py] of [...testA, ...testB]) out.push(`<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${r}" class="dot2"/>`);
       }
@@ -115,15 +133,15 @@ export function createChart(svg, tip, table) {
   }
 
   function renderTable() {
-    const endurance = history.some((h) => Number.isFinite(h.stops));
-    const extraHead = endurance ? '<th>Stopps je Rennen</th><th>Ausfälle</th>' : '';
+    const withStops = endurance || history.some((h) => Number.isFinite(h.stops));
+    const extraHead = withStops ? '<th>Stopps je Rennen</th><th>Ausfälle</th>' : '';
     const rows = [`<tr><th>Generation</th><th>Strecken geschafft</th><th>Tempo Test (km/h)</th><th>Tempo Training (km/h)</th><th>Schwierigkeit</th>${extraHead}</tr>`];
     for (const t of tests) {
       const h = history[t.gen - 1];
-      const extra = endurance ? `<td>${h && Number.isFinite(h.stops) ? fmt(h.stops, 1) : '–'}</td><td>${h && Number.isFinite(h.retired) ? `${Math.round(h.retired)} / 3` : '–'}</td>` : '';
+      const extra = withStops ? `<td>${h && Number.isFinite(h.stops) ? fmt(h.stops, 1) : '–'}</td><td>${h && Number.isFinite(h.retired) ? `${Math.round(h.retired)} / 3` : '–'}</td>` : '';
       rows.push(`<tr><td>${Math.round(t.gen)}</td><td>${Math.round(t.passed)} / 20</td><td>${fmt(Number(t.meanSpeed) * KMH)}</td><td>${h ? fmt(h.best * KMH) : '–'}</td><td>${h ? Math.round(h.difficulty * 10) : '–'} / 10</td>${extra}</tr>`);
     }
-    if (!tests.length) rows.push(`<tr><td colspan="${endurance ? 7 : 5}" style="text-align:left">Der erste Test kommt nach Generation 5.</td></tr>`);
+    if (!tests.length) rows.push(`<tr><td colspan="${withStops ? 7 : 5}" style="text-align:left">Der erste Test kommt nach Generation 5.</td></tr>`);
     table.innerHTML = rows.join('');
   }
 
@@ -199,8 +217,11 @@ export function createChart(svg, tip, table) {
   }
 
   return {
-    /** @param {object[]} nextHistory GenStats per generation  @param {object[]} nextTests test results */
-    update(nextHistory, nextTests) { history = nextHistory; tests = nextTests; hide(); render(); },
+    /**
+     * @param {object[]} nextHistory GenStats per generation  @param {object[]} nextTests test results
+     * @param {{endurance?: boolean}} [opts] endurance: the middle panel shows pit stops
+     */
+    update(nextHistory, nextTests, opts = {}) { history = nextHistory; tests = nextTests; endurance = Boolean(opts.endurance); hide(); render(); },
     resize() { render(); },
   };
 }

@@ -121,7 +121,7 @@ function syncInputs() {
 
 function onGeneration() {
   updateStats();
-  chart.update(trainer.history, trainer.tests);
+  chart.update(trainer.history, trainer.tests, { endurance: mode === 'ausdauer' });
   if (performance.now() - lastSave > SAVE_EVERY_MS) save();
 }
 
@@ -227,7 +227,7 @@ function refresh() {
   }
   syncInputs();
   updateStats();
-  chart.update(trainer?.history ?? [], trainer?.tests ?? []);
+  chart.update(trainer?.history ?? [], trainer?.tests ?? [], { endurance: mode === 'ausdauer' });
   setRunning(false);
   trackView.refresh();
   dirty = true;

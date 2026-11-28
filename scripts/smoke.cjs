@@ -314,6 +314,19 @@ async function waitGen(page, min, ms) {
       noErrors2();
     });
 
+    await check('Lernkurve im Ausdauer-Modus zeigt die Boxenstopps statt der Teststrecken', async () => {
+      const chartText = await p2.textContent('#chart');
+      if (!/Boxenstopps je Rennen/.test(chartText)) throw new Error('Feld für Boxenstopps fehlt');
+      if (/Unbekannte Strecken geschafft/.test(chartText)) throw new Error('Feld der Teststrecken steht noch da');
+      const lines = await p2.locator('#chart path.stops').count();
+      if (lines !== 1) throw new Error(`Linie der Stopps: ${lines}`);
+      await p2.click('#mode-fahren');
+      const fahrenText = await p2.textContent('#chart');
+      if (!/Unbekannte Strecken geschafft/.test(fahrenText) || /Boxenstopps/.test(fahrenText)) throw new Error('Kurve im Modus Fahren verändert');
+      await p2.click('#mode-ausdauer');
+      noErrors2();
+    });
+
     await check('jeder Modus hat seinen eigenen Stand', async () => {
       await p2.click('#mode-fahren');
       if ((await gen(p2)) !== 0) throw new Error('Fahren zeigt nicht 0');
